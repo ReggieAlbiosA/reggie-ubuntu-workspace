@@ -26,7 +26,7 @@ prompt_install() {
 echo -e "\n${CYAN}=== Checking Dependencies ===${NC}"
 
 # --- Check Node.js ---
-echo -e "\n${NC}[1/6] Node.js${NC}"
+echo -e "\n${NC}[1/7] Node.js${NC}"
 if command_exists node; then
     echo -e "  ${GREEN}+ Already installed: $(node --version)${NC}"
 else
@@ -46,7 +46,7 @@ else
 fi
 
 # --- Check Git ---
-echo -e "\n${NC}[2/6] Git${NC}"
+echo -e "\n${NC}[2/7] Git${NC}"
 if command_exists git; then
     echo -e "  ${GREEN}+ Already installed: $(git --version)${NC}"
 else
@@ -65,7 +65,7 @@ else
 fi
 
 # --- Check pnpm ---
-echo -e "\n${NC}[3/6] pnpm${NC}"
+echo -e "\n${NC}[3/7] pnpm${NC}"
 if command_exists pnpm; then
     echo -e "  ${GREEN}+ Already installed: v$(pnpm --version)${NC}"
 else
@@ -86,7 +86,7 @@ else
 fi
 
 # --- Check VS Code ---
-echo -e "\n${NC}[4/6] VS Code${NC}"
+echo -e "\n${NC}[4/7] VS Code${NC}"
 if command_exists code; then
     echo -e "  ${GREEN}+ Already installed: $(code --version | head -1)${NC}"
 else
@@ -105,7 +105,7 @@ else
 fi
 
 # --- Check Cursor ---
-echo -e "\n${NC}[5/6] Cursor${NC}"
+echo -e "\n${NC}[5/7] Cursor${NC}"
 if command_exists cursor; then
     echo -e "  ${GREEN}+ Already installed${NC}"
 else
@@ -130,7 +130,7 @@ else
 fi
 
 # --- Check Google Antigravity ---
-echo -e "\n${NC}[6/6] Google Antigravity${NC}"
+echo -e "\n${NC}[6/7] Google Antigravity${NC}"
 if command_exists antigravity; then
     echo -e "  ${GREEN}+ Already installed${NC}"
 else
@@ -148,6 +148,35 @@ else
             echo -e "  ${GREEN}+ Installed to $ANTIGRAVITY_DIR${NC}"
         else
             echo -e "  ${YELLOW}! Installation failed${NC}"
+        fi
+    else
+        echo -e "  > Skipped"
+    fi
+fi
+
+# --- Claude Code Setup (Modular) ---
+echo -e "\n${NC}[7/7] Claude Code${NC}"
+if command_exists claude; then
+    claude_version=$(claude --version 2>/dev/null)
+    echo -e "  ${GREEN}+ Already installed: $claude_version${NC}"
+    echo -e "  ${GRAY}i Run 'claude-code-setup.sh' separately to configure MCP servers${NC}"
+else
+    echo -e "  ${YELLOW}- Not installed${NC}"
+    if prompt_install "Claude Code (includes MCP servers setup)"; then
+        echo -e "  ${CYAN}> Running Claude Code setup...${NC}"
+
+        # Determine script location (local or remote)
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        CLAUDE_SETUP_SCRIPT="$SCRIPT_DIR/claude-code-setup.sh"
+
+        if [ -f "$CLAUDE_SETUP_SCRIPT" ]; then
+            # Local: source the script
+            source "$CLAUDE_SETUP_SCRIPT"
+        else
+            # Remote: download and execute from GitHub
+            CLAUDE_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/claude-code-setup.sh"
+            echo -e "  ${CYAN}> Downloading claude-code-setup.sh...${NC}"
+            curl -fsSL "$CLAUDE_SETUP_URL" | bash
         fi
     else
         echo -e "  > Skipped"
