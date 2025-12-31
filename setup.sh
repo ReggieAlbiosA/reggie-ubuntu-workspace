@@ -26,7 +26,7 @@ prompt_install() {
 echo -e "\n${CYAN}=== Checking Dependencies ===${NC}"
 
 # --- Check Node.js ---
-echo -e "\n${NC}[1/7] Node.js${NC}"
+echo -e "\n${NC}[1/8] Node.js${NC}"
 if command_exists node; then
     echo -e "  ${GREEN}+ Already installed: $(node --version)${NC}"
 else
@@ -46,7 +46,7 @@ else
 fi
 
 # --- Check Git ---
-echo -e "\n${NC}[2/7] Git${NC}"
+echo -e "\n${NC}[2/8] Git${NC}"
 if command_exists git; then
     echo -e "  ${GREEN}+ Already installed: $(git --version)${NC}"
 else
@@ -65,7 +65,7 @@ else
 fi
 
 # --- Check pnpm ---
-echo -e "\n${NC}[3/7] pnpm${NC}"
+echo -e "\n${NC}[3/8] pnpm${NC}"
 if command_exists pnpm; then
     echo -e "  ${GREEN}+ Already installed: v$(pnpm --version)${NC}"
 else
@@ -86,7 +86,7 @@ else
 fi
 
 # --- Check VS Code ---
-echo -e "\n${NC}[4/7] VS Code${NC}"
+echo -e "\n${NC}[4/8] VS Code${NC}"
 if command_exists code; then
     echo -e "  ${GREEN}+ Already installed: $(code --version | head -1)${NC}"
 else
@@ -105,7 +105,7 @@ else
 fi
 
 # --- Check Cursor ---
-echo -e "\n${NC}[5/7] Cursor${NC}"
+echo -e "\n${NC}[5/8] Cursor${NC}"
 if command_exists cursor; then
     echo -e "  ${GREEN}+ Already installed${NC}"
 else
@@ -130,7 +130,7 @@ else
 fi
 
 # --- Check Google Antigravity ---
-echo -e "\n${NC}[6/7] Google Antigravity${NC}"
+echo -e "\n${NC}[6/8] Google Antigravity${NC}"
 if command_exists antigravity; then
     echo -e "  ${GREEN}+ Already installed${NC}"
 else
@@ -155,7 +155,7 @@ else
 fi
 
 # --- Claude Code Setup (Modular) ---
-echo -e "\n${NC}[7/7] Claude Code${NC}"
+echo -e "\n${NC}[7/8] Claude Code${NC}"
 if command_exists claude; then
     claude_version=$(claude --version 2>/dev/null)
     echo -e "  ${GREEN}+ Already installed: $claude_version${NC}"
@@ -177,6 +177,37 @@ else
             CLAUDE_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/claude-code-setup.sh"
             echo -e "  ${CYAN}> Downloading claude-code-setup.sh...${NC}"
             curl -fsSL "$CLAUDE_SETUP_URL" | bash
+        fi
+    else
+        echo -e "  > Skipped"
+    fi
+fi
+
+# --- Git Identity Manager (Modular) ---
+echo -e "\n${NC}[8/8] Git Identity Manager${NC}"
+if [ -f "$HOME/.git-hooks/pre-commit" ] && [ -f "$HOME/.git-identities" ]; then
+    identity_count=$(wc -l < "$HOME/.git-identities")
+    echo -e "  ${GREEN}+ Already configured with $identity_count identity/identities${NC}"
+    echo -e "  ${GRAY}i Run 'git-identity-setup.sh' separately to reconfigure${NC}"
+else
+    echo -e "  ${YELLOW}- Not configured${NC}"
+    read -p "  > Install Git Identity Manager (prompts for author on each commit)? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "  ${CYAN}> Running Git Identity Manager setup...${NC}"
+
+        # Determine script location (local or remote)
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        GIT_IDENTITY_SCRIPT="$SCRIPT_DIR/git-identity-setup.sh"
+
+        if [ -f "$GIT_IDENTITY_SCRIPT" ]; then
+            # Local: source the script
+            source "$GIT_IDENTITY_SCRIPT"
+        else
+            # Remote: download and execute from GitHub
+            GIT_IDENTITY_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/git-identity-setup.sh"
+            echo -e "  ${CYAN}> Downloading git-identity-setup.sh...${NC}"
+            curl -fsSL "$GIT_IDENTITY_URL" | bash
         fi
     else
         echo -e "  > Skipped"
@@ -283,3 +314,4 @@ echo -e "  ${GREEN}+ Autostart configured (runs at login)${NC}"
 echo -e "  ${GREEN}+ Bash aliases configured (restart terminal to use)${NC}"
 echo -e "\nTo test now, run: $SCRIPT_DEST"
 echo -e "To manage autostart, check: $DESKTOP_FILE"
+# test
