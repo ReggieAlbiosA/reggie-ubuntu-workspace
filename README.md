@@ -8,14 +8,31 @@ Automated Ubuntu workspace setup - opens browser tabs and apps on login.
 curl -fsSL https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/setup.sh | bash
 ```
 
+### Install Overrides
+
+```bash
+# Auto-accept all prompts (including optional modules)
+curl -fsSL .../setup.sh | bash -s -- -y
+
+# Skip optional modules (Claude Code, Git Identity)
+curl -fsSL .../setup.sh | bash -s -- --skip-optional
+
+# Or run locally with flags
+./setup.sh -y
+./setup.sh --skip-optional
+./setup.sh --defaults-only
+```
+
 ## What It Does
 
-- Installs dev tools (Node.js, Git, pnpm, VS Code, Cursor, Antigravity)
-- Downloads workspace launcher to Desktop
-- Creates autostart entry for login
-- Sets up bash aliases (git shortcuts, common commands)
-- Optional: Claude Code CLI with MCP servers
-- Optional: Git Identity Manager (multi-identity commits)
+**Auto-installed (no prompts):**
+- Core dev tools: Node.js, Git, pnpm, VS Code, Cursor, Antigravity
+- Workspace launcher (Desktop + autostart)
+- Bash aliases (git shortcuts, common commands)
+
+**Optional (prompts y/n):**
+- Claude Code CLI with MCP servers
+- Git Identity Manager (multi-identity commits)
 
 ## Scripts
 
