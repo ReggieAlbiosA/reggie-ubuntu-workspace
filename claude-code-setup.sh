@@ -13,6 +13,15 @@ GRAY='\033[0;90m'
 MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
 
+# Detect if running as root/sudo for scope determination
+if [ "$EUID" -eq 0 ]; then
+    MCP_SCOPE="system"
+    BASHRC_PATH="/root/.bashrc"
+else
+    MCP_SCOPE="user"
+    BASHRC_PATH="$HOME/.bashrc"
+fi
+
 # Helper function to check if a command exists
 command_exists() {
     command -v "$1" &> /dev/null
@@ -20,16 +29,32 @@ command_exists() {
 
 # Helper function to prompt user
 prompt_install() {
-    read -p "  > Install $1? (Y/N) " -n 1 -r
-    echo
-    [[ $REPLY =~ ^[Yy]$ ]]
+    while true; do
+        read -p "  > Install $1? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            return 0
+        elif [[ $REPLY =~ ^[Nn]$ ]]; then
+            return 1
+        else
+            echo -e "  ${RED}! Invalid input. Please enter 'y' or 'n'${NC}"
+        fi
+    done
 }
 
 # Helper function to prompt for reconfiguration
 prompt_reconfigure() {
-    read -p "  > $1 failed to connect. Reconfigure? (Y/N) " -n 1 -r
-    echo
-    [[ $REPLY =~ ^[Yy]$ ]]
+    while true; do
+        read -p "  > $1 failed to connect. Reconfigure? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            return 0
+        elif [[ $REPLY =~ ^[Nn]$ ]]; then
+            return 1
+        else
+            echo -e "  ${RED}! Invalid input. Please enter 'y' or 'n'${NC}"
+        fi
+    done
 }
 
 # Check and install Node.js
@@ -128,21 +153,21 @@ get_mcp_status() {
 
 # Configure MCP Servers
 add_mcp_servers() {
-    echo -e "\n${NC}[4/4] Configuring MCP Servers...${NC}"
+    echo -e "\n${NC}[4/4] Configuring MCP Servers (${MCP_SCOPE} scope)...${NC}"
 
     if ! command_exists claude; then
         echo -e "  ${RED}! Claude Code not found. Cannot configure MCP servers.${NC}"
         return 1
     fi
 
-    local success=true
+    local success=0
 
     # Add better-auth MCP server
     echo -e "  ${CYAN}> Checking better-auth MCP server...${NC}"
     local better_auth_status=$(get_mcp_status "better-auth")
 
     if [ "$better_auth_status" = "connected" ]; then
-        echo -e "  ${GREEN}+ better-auth connected${NC}"
+        echo -e "  ${GREEN}✓ better-auth already configured${NC}"
     elif [ "$better_auth_status" = "failed" ]; then
         if prompt_reconfigure "better-auth"; then
             claude mcp remove better-auth --scope user 2>/dev/null
@@ -152,7 +177,7 @@ add_mcp_servers() {
                 echo -e "  ${GREEN}+ better-auth reconfigured${NC}"
             else
                 echo -e "  ${RED}! Failed to reconfigure better-auth${NC}"
-                success=false
+                success=1
             fi
         else
             echo -e "  ${YELLOW}! better-auth skipped (not connected)${NC}"
@@ -163,7 +188,7 @@ add_mcp_servers() {
             echo -e "  ${GREEN}+ better-auth added${NC}"
         else
             echo -e "  ${RED}! Failed to add better-auth${NC}"
-            success=false
+            success=1
         fi
     fi
 
@@ -172,7 +197,7 @@ add_mcp_servers() {
     local seq_think_status=$(get_mcp_status "sequential-thinking")
 
     if [ "$seq_think_status" = "connected" ]; then
-        echo -e "  ${GREEN}+ sequential-thinking connected${NC}"
+        echo -e "  ${GREEN}✓ sequential-thinking already configured${NC}"
     elif [ "$seq_think_status" = "failed" ]; then
         if prompt_reconfigure "sequential-thinking"; then
             claude mcp remove sequential-thinking --scope user 2>/dev/null
@@ -182,7 +207,7 @@ add_mcp_servers() {
                 echo -e "  ${GREEN}+ sequential-thinking reconfigured${NC}"
             else
                 echo -e "  ${RED}! Failed to reconfigure sequential-thinking${NC}"
-                success=false
+                success=1
             fi
         else
             echo -e "  ${YELLOW}! sequential-thinking skipped (not connected)${NC}"
@@ -193,7 +218,7 @@ add_mcp_servers() {
             echo -e "  ${GREEN}+ sequential-thinking added${NC}"
         else
             echo -e "  ${RED}! Failed to add sequential-thinking${NC}"
-            success=false
+            success=1
         fi
     fi
 
@@ -202,7 +227,7 @@ add_mcp_servers() {
     local github_status=$(get_mcp_status "github")
 
     if [ "$github_status" = "connected" ]; then
-        echo -e "  ${GREEN}+ github connected${NC}"
+        echo -e "  ${GREEN}✓ github already configured${NC}"
     elif [ "$github_status" = "failed" ] || [ "$github_status" = "notfound" ]; then
         local action="Configure"
         if [ "$github_status" = "failed" ]; then
@@ -224,10 +249,10 @@ add_mcp_servers() {
             echo -e "  ${CYAN}> Setting GITHUB_TOKEN environment variable...${NC}"
 
             # Remove old GITHUB_TOKEN if exists
-            sed -i '/^export GITHUB_TOKEN=/d' "$HOME/.bashrc"
+            sed -i '/^export GITHUB_TOKEN=/d' "$BASHRC_PATH"
 
             # Add new GITHUB_TOKEN
-            echo "export GITHUB_TOKEN=\"$github_token\"" >> "$HOME/.bashrc"
+            echo "export GITHUB_TOKEN=\"$github_token\"" >> "$BASHRC_PATH"
 
             # Set for current session
             export GITHUB_TOKEN="$github_token"
@@ -243,7 +268,7 @@ add_mcp_servers() {
                 echo -e "  ${YELLOW}! Restart terminal for GITHUB_TOKEN to take full effect${NC}"
             else
                 echo -e "  ${RED}! Failed to add github${NC}"
-                success=false
+                success=1
             fi
         fi
     fi
@@ -257,6 +282,11 @@ main() {
     echo -e "${MAGENTA}==========================================${NC}"
     echo -e "${MAGENTA}    Claude Code Installation Script${NC}"
     echo -e "${MAGENTA}==========================================${NC}"
+    if [ "$MCP_SCOPE" = "system" ]; then
+        echo -e "${CYAN}    Running as root - system scope${NC}"
+    else
+        echo -e "${CYAN}    Running as user - user scope${NC}"
+    fi
     echo ""
 
     # Step 1: Install Node.js
@@ -281,7 +311,9 @@ main() {
     fi
 
     # Step 4: Configure MCP Servers
-    add_mcp_servers
+    if ! add_mcp_servers; then
+        echo -e "\n${YELLOW}! Some MCP servers may not have been configured properly${NC}"
+    fi
 
     # Success summary
     echo ""
@@ -290,7 +322,12 @@ main() {
     echo -e "${GREEN}==========================================${NC}"
     echo ""
     echo -e "${CYAN}You can now run 'claude' to start!${NC}"
-    echo -e "${CYAN}MCP servers are configured in user scope (~/.claude.json)${NC}"
+    if [ "$MCP_SCOPE" = "system" ]; then
+        echo -e "${CYAN}MCP servers are configured in system scope (/root/.claude.json)${NC}"
+        echo -e "${YELLOW}Run 'sudo claude' to use MCP servers, or re-run without sudo for user scope${NC}"
+    else
+        echo -e "${CYAN}MCP servers are configured in user scope (~/.claude.json)${NC}"
+    fi
     echo ""
 }
 
