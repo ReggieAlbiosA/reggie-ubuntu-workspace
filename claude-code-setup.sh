@@ -151,7 +151,45 @@ get_mcp_status() {
     fi
 }
 
-# Configure MCP Servers
+# Install GitHub MCP server (extracted for reuse)
+install_github_mcp() {
+    echo -e "  ${CYAN}> Configure github MCP server...${NC}"
+    read -p "  > Enter your GitHub Personal Access Token: " github_token
+
+    if [ -z "$github_token" ]; then
+        echo -e "  ${YELLOW}! No token provided, skipping github MCP server${NC}"
+        return 1
+    fi
+
+    # Set GITHUB_TOKEN in .bashrc for persistence
+    echo -e "  ${CYAN}> Setting GITHUB_TOKEN environment variable...${NC}"
+
+    # Remove old GITHUB_TOKEN if exists
+    sed -i '/^export GITHUB_TOKEN=/d' "$BASHRC_PATH"
+
+    # Add new GITHUB_TOKEN
+    echo "export GITHUB_TOKEN=\"$github_token\"" >> "$BASHRC_PATH"
+
+    # Set for current session
+    export GITHUB_TOKEN="$github_token"
+
+    echo -e "  ${GREEN}+ GITHUB_TOKEN set${NC}"
+
+    # Add GitHub MCP server
+    echo -e "  ${CYAN}> Adding github MCP server...${NC}"
+    claude mcp add github --scope user -- npx @modelcontextprotocol/server-github
+
+    if [ $? -eq 0 ]; then
+        echo -e "  ${GREEN}+ github added${NC}"
+        echo -e "  ${YELLOW}! Restart terminal for GITHUB_TOKEN to take full effect${NC}"
+        return 0
+    else
+        echo -e "  ${RED}! Failed to add github${NC}"
+        return 1
+    fi
+}
+
+# Configure MCP Servers (smart check first, then install missing only)
 add_mcp_servers() {
     echo -e "\n${NC}[4/4] Configuring MCP Servers (${MCP_SCOPE} scope)...${NC}"
 
@@ -160,120 +198,173 @@ add_mcp_servers() {
         return 1
     fi
 
+    # Check all MCPs first using claude mcp list
+    echo -e "  ${CYAN}> Checking existing MCP configurations...${NC}"
+
+    local expected_mcps=("better-auth" "sequential-thinking" "github")
+    local missing_mcps=()
+    local connected_mcps=()
+
+    for mcp in "${expected_mcps[@]}"; do
+        local status=$(get_mcp_status "$mcp")
+        if [ "$status" = "connected" ]; then
+            connected_mcps+=("$mcp")
+        else
+            missing_mcps+=("$mcp")
+        fi
+    done
+
+    # Show status summary
+    echo -e "\n${NC}─── MCP Status ───${NC}"
+    for mcp in "${connected_mcps[@]}"; do
+        echo -e "  ${GREEN}✓ $mcp - Connected${NC}"
+    done
+    for mcp in "${missing_mcps[@]}"; do
+        echo -e "  ${YELLOW}○ $mcp - Not configured${NC}"
+    done
+
+    # If all connected, we're done
+    if [ ${#missing_mcps[@]} -eq 0 ]; then
+        echo -e "\n${GREEN}All MCP servers already configured!${NC}"
+        return 0
+    fi
+
+    # Ask once if user wants to configure missing MCPs
+    echo ""
+    while true; do
+        read -p "  > Configure ${#missing_mcps[@]} missing MCP(s)? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            break
+        elif [[ $REPLY =~ ^[Nn]$ ]]; then
+            echo -e "  ${GRAY}> Skipped MCP configuration${NC}"
+            return 0
+        else
+            echo -e "  ${RED}! Invalid input. Please enter 'y' or 'n'${NC}"
+        fi
+    done
+
+    # Install only missing MCPs
     local success=0
+    for mcp in "${missing_mcps[@]}"; do
+        echo -e "\n  ${CYAN}> Installing $mcp...${NC}"
 
-    # Add better-auth MCP server
-    echo -e "  ${CYAN}> Checking better-auth MCP server...${NC}"
-    local better_auth_status=$(get_mcp_status "better-auth")
+        # Remove if exists (in case it's in failed state)
+        claude mcp remove "$mcp" --scope user 2>/dev/null
 
-    if [ "$better_auth_status" = "connected" ]; then
-        echo -e "  ${GREEN}✓ better-auth already configured${NC}"
-    elif [ "$better_auth_status" = "failed" ]; then
-        if prompt_reconfigure "better-auth"; then
-            claude mcp remove better-auth --scope user 2>/dev/null
-            echo -e "  ${CYAN}> Reconfiguring better-auth...${NC}"
-            claude mcp add better-auth --scope user --transport http https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp
-            if [ $? -eq 0 ]; then
-                echo -e "  ${GREEN}+ better-auth reconfigured${NC}"
-            else
-                echo -e "  ${RED}! Failed to reconfigure better-auth${NC}"
-                success=1
-            fi
-        else
-            echo -e "  ${YELLOW}! better-auth skipped (not connected)${NC}"
-        fi
-    else
-        claude mcp add better-auth --scope user --transport http https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp
-        if [ $? -eq 0 ]; then
-            echo -e "  ${GREEN}+ better-auth added${NC}"
-        else
-            echo -e "  ${RED}! Failed to add better-auth${NC}"
-            success=1
-        fi
-    fi
-
-    # Add Sequential Thinking MCP server
-    echo -e "  ${CYAN}> Checking sequential-thinking MCP server...${NC}"
-    local seq_think_status=$(get_mcp_status "sequential-thinking")
-
-    if [ "$seq_think_status" = "connected" ]; then
-        echo -e "  ${GREEN}✓ sequential-thinking already configured${NC}"
-    elif [ "$seq_think_status" = "failed" ]; then
-        if prompt_reconfigure "sequential-thinking"; then
-            claude mcp remove sequential-thinking --scope user 2>/dev/null
-            echo -e "  ${CYAN}> Reconfiguring sequential-thinking...${NC}"
-            claude mcp add sequential-thinking --scope user -- npx @modelcontextprotocol/server-sequential-thinking
-            if [ $? -eq 0 ]; then
-                echo -e "  ${GREEN}+ sequential-thinking reconfigured${NC}"
-            else
-                echo -e "  ${RED}! Failed to reconfigure sequential-thinking${NC}"
-                success=1
-            fi
-        else
-            echo -e "  ${YELLOW}! sequential-thinking skipped (not connected)${NC}"
-        fi
-    else
-        claude mcp add sequential-thinking --scope user -- npx @modelcontextprotocol/server-sequential-thinking
-        if [ $? -eq 0 ]; then
-            echo -e "  ${GREEN}+ sequential-thinking added${NC}"
-        else
-            echo -e "  ${RED}! Failed to add sequential-thinking${NC}"
-            success=1
-        fi
-    fi
-
-    # Add GitHub MCP server
-    echo -e "  ${CYAN}> Checking github MCP server...${NC}"
-    local github_status=$(get_mcp_status "github")
-
-    if [ "$github_status" = "connected" ]; then
-        echo -e "  ${GREEN}✓ github already configured${NC}"
-    elif [ "$github_status" = "failed" ] || [ "$github_status" = "notfound" ]; then
-        local action="Configure"
-        if [ "$github_status" = "failed" ]; then
-            action="Reconfigure"
-            if ! prompt_reconfigure "github"; then
-                echo -e "  ${YELLOW}! github skipped (not connected)${NC}"
-                return $success
-            fi
-            claude mcp remove github --scope user 2>/dev/null
-        fi
-
-        echo -e "  ${CYAN}> $action github MCP server...${NC}"
-        read -p "  > Enter your GitHub Personal Access Token: " github_token
-
-        if [ -z "$github_token" ]; then
-            echo -e "  ${YELLOW}! No token provided, skipping github MCP server${NC}"
-        else
-            # Set GITHUB_TOKEN in .bashrc for persistence
-            echo -e "  ${CYAN}> Setting GITHUB_TOKEN environment variable...${NC}"
-
-            # Remove old GITHUB_TOKEN if exists
-            sed -i '/^export GITHUB_TOKEN=/d' "$BASHRC_PATH"
-
-            # Add new GITHUB_TOKEN
-            echo "export GITHUB_TOKEN=\"$github_token\"" >> "$BASHRC_PATH"
-
-            # Set for current session
-            export GITHUB_TOKEN="$github_token"
-
-            echo -e "  ${GREEN}+ GITHUB_TOKEN set${NC}"
-
-            # Add GitHub MCP server
-            echo -e "  ${CYAN}> Adding github MCP server...${NC}"
-            claude mcp add github --scope user -- npx @modelcontextprotocol/server-github
-
-            if [ $? -eq 0 ]; then
-                echo -e "  ${GREEN}+ github added${NC}"
-                echo -e "  ${YELLOW}! Restart terminal for GITHUB_TOKEN to take full effect${NC}"
-            else
-                echo -e "  ${RED}! Failed to add github${NC}"
-                success=1
-            fi
-        fi
-    fi
+        case "$mcp" in
+            "better-auth")
+                claude mcp add better-auth --scope user --transport http \
+                    https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp
+                if [ $? -eq 0 ]; then
+                    echo -e "  ${GREEN}+ better-auth added${NC}"
+                else
+                    echo -e "  ${RED}! Failed to add better-auth${NC}"
+                    success=1
+                fi
+                ;;
+            "sequential-thinking")
+                claude mcp add sequential-thinking --scope user -- \
+                    npx @modelcontextprotocol/server-sequential-thinking
+                if [ $? -eq 0 ]; then
+                    echo -e "  ${GREEN}+ sequential-thinking added${NC}"
+                else
+                    echo -e "  ${RED}! Failed to add sequential-thinking${NC}"
+                    success=1
+                fi
+                ;;
+            "github")
+                install_github_mcp || success=1
+                ;;
+        esac
+    done
 
     return $success
+}
+
+# Reinstall only the specified missing MCPs
+reinstall_missing_mcps() {
+    local mcps=("$@")
+
+    for mcp in "${mcps[@]}"; do
+        echo -e "\n  ${CYAN}> Reinstalling $mcp...${NC}"
+
+        # Remove existing (if any)
+        claude mcp remove "$mcp" --scope user 2>/dev/null
+
+        case "$mcp" in
+            "better-auth")
+                claude mcp add better-auth --scope user --transport http \
+                    https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp
+                ;;
+            "sequential-thinking")
+                claude mcp add sequential-thinking --scope user -- \
+                    npx @modelcontextprotocol/server-sequential-thinking
+                ;;
+            "github")
+                # GitHub needs special handling for token
+                install_github_mcp
+                ;;
+        esac
+
+        # Verify after reinstall
+        local status=$(get_mcp_status "$mcp")
+        if [ "$status" = "connected" ]; then
+            echo -e "  ${GREEN}✓ $mcp reinstalled successfully${NC}"
+        else
+            echo -e "  ${YELLOW}! $mcp added but not yet connected (may need terminal restart)${NC}"
+        fi
+    done
+}
+
+# Verify and offer to fix missing MCPs
+verify_mcp_installation() {
+    echo -e "\n${CYAN}> Verifying MCP installations...${NC}"
+
+    local expected_mcps=("better-auth" "sequential-thinking" "github")
+    local missing_mcps=()
+    local connected_mcps=()
+
+    # Check each expected MCP
+    for mcp in "${expected_mcps[@]}"; do
+        local status=$(get_mcp_status "$mcp")
+        if [ "$status" = "connected" ]; then
+            connected_mcps+=("$mcp")
+        else
+            missing_mcps+=("$mcp")
+        fi
+    done
+
+    # Show summary
+    echo -e "\n${NC}─── MCP Status Summary ───${NC}"
+    for mcp in "${connected_mcps[@]}"; do
+        echo -e "  ${GREEN}✓ $mcp - Connected${NC}"
+    done
+    for mcp in "${missing_mcps[@]}"; do
+        echo -e "  ${RED}✗ $mcp - Missing/Failed${NC}"
+    done
+
+    # If all connected, we're done
+    if [ ${#missing_mcps[@]} -eq 0 ]; then
+        echo -e "\n${GREEN}All MCP servers configured successfully!${NC}"
+        return 0
+    fi
+
+    # Offer to reinstall missing MCPs
+    echo -e "\n${YELLOW}${#missing_mcps[@]} MCP server(s) not connected.${NC}"
+    while true; do
+        read -p "  > Would you like to reconfigure missing MCPs? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            reinstall_missing_mcps "${missing_mcps[@]}"
+            return 0
+        elif [[ $REPLY =~ ^[Nn]$ ]]; then
+            echo -e "  ${GRAY}> Skipped reconfiguration${NC}"
+            return 0
+        else
+            echo -e "  ${RED}! Invalid input. Please enter 'y' or 'n'${NC}"
+        fi
+    done
 }
 
 # Main execution
@@ -311,9 +402,10 @@ main() {
     fi
 
     # Step 4: Configure MCP Servers
-    if ! add_mcp_servers; then
-        echo -e "\n${YELLOW}! Some MCP servers may not have been configured properly${NC}"
-    fi
+    add_mcp_servers
+
+    # Step 5: Verify and fix missing MCPs
+    verify_mcp_installation
 
     # Success summary
     echo ""

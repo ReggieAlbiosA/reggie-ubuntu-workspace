@@ -11,3 +11,4 @@ xdg-open "https://www.google.com" &
 # Open applications
 gnome-terminal &
 obsidian &
+cursor &

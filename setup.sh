@@ -4,7 +4,7 @@
 #
 # Install overrides:
 #   -y, --yes           Auto-accept all prompts
-#   --skip-optional     Skip optional modules (Claude Code, Git Identity)
+#   --skip-optional     Skip optional modules (Claude Code, CLI Tools, Git Identity)
 #   --defaults-only     Same as --skip-optional
 
 set -e
@@ -90,7 +90,7 @@ prompt_optional() {
 }
 
 # Track installation progress
-TOTAL_STEPS=8
+TOTAL_STEPS=9
 CURRENT_STEP=0
 INSTALLED_APPS=()
 SKIPPED_APPS=()
@@ -118,6 +118,52 @@ show_realtime_header() {
 
 show_realtime_footer() {
     echo -e "  ${YELLOW}└───────────────────────┘${NC}"
+}
+
+# Get MCP server status using claude mcp list
+get_mcp_status() {
+    local server_name="$1"
+    local mcp_list=$(claude mcp list 2>/dev/null)
+
+    if echo "$mcp_list" | grep -q "^$server_name:.*Connected"; then
+        echo "connected"
+    elif echo "$mcp_list" | grep -q "^$server_name:.*Failed"; then
+        echo "failed"
+    else
+        echo "notfound"
+    fi
+}
+
+# Check MCP configuration status - returns number of missing MCPs
+# Also displays status summary
+check_mcp_configuration() {
+    local expected_mcps=("better-auth" "sequential-thinking" "github")
+    local missing_mcps=()
+    local connected_mcps=()
+
+    echo -e "  ${CYAN}> Checking MCP configurations...${NC}"
+
+    for mcp in "${expected_mcps[@]}"; do
+        local status=$(get_mcp_status "$mcp")
+        if [ "$status" = "connected" ]; then
+            connected_mcps+=("$mcp")
+        else
+            missing_mcps+=("$mcp")
+        fi
+    done
+
+    # Show status summary
+    echo -e "\n  ${NC}─── MCP Status ───${NC}"
+    for mcp in "${connected_mcps[@]}"; do
+        echo -e "  ${GREEN}✓ $mcp - Connected${NC}"
+    done
+    for mcp in "${missing_mcps[@]}"; do
+        echo -e "  ${YELLOW}○ $mcp - Not configured${NC}"
+    done
+
+    # Return count of missing MCPs (stored in global for caller to use)
+    MISSING_MCP_COUNT=${#missing_mcps[@]}
+    return ${#missing_mcps[@]}
 }
 
 # ============================================
@@ -348,19 +394,37 @@ echo -e "  ${CYAN}> Configuring workspace automation...${NC}"
 # Git Aliases
 alias gs='git status'
 alias ga='git add'
-alias gc='git commit -m'
 alias gp='git push'
 alias gl='git log --oneline --decorate --graph'
 alias gd='git diff'
 alias gco='git checkout'
 alias gb='git branch'
 alias gpull='git pull'
-alias gsw='git switch'
+alias gc='git commit'
 
-# Directory shortcuts
+gsw() {
+    git switch "$@"
+}
+
+gr() {
+    git remote "$@"
+}
+
+gcp() {
+    git cherry-pick "$@"
+}
+
+# personal shortcuts
 alias ~='cd ~'
 alias ..='cd ..'
 alias ...='cd ../..'
+alias te='gnome-text-editor'
+alias claude='claude --dangerously-skip-permissions'
+alias folders='nautilus &'
+alias t='tldr'
+alias cat='batcat
+alias m='micro'
+alias ls='exa'
 
 # ls aliases
 alias ll='ls -alF'
@@ -428,33 +492,42 @@ else
     echo -e "${MAGENTA}========================================${NC}"
 
     # --- Claude Code ---
-    echo -e "\n${MAGENTA}[Optional 1/2] Claude Code${NC}"
+    echo -e "\n${MAGENTA}[Optional 1/3] Claude Code${NC}"
     if command_exists claude; then
         claude_version=$(claude --version 2>/dev/null)
         echo -e "  ${GREEN}✓ Already installed: $claude_version${NC}"
         log_installed "Claude Code $claude_version"
-        # Still run MCP configuration even if Claude Code is already installed
-        if prompt_optional "Configure MCP servers"; then
-            echo -e "  ${CYAN}> Configuring MCP servers...${NC}"
-            show_realtime_header
 
-            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
-            CLAUDE_SETUP_SCRIPT="$SCRIPT_DIR/claude-code-setup.sh"
+        # Check MCP configuration status FIRST using claude mcp list
+        check_mcp_configuration
 
-            if [ -f "$CLAUDE_SETUP_SCRIPT" ]; then
-                bash "$CLAUDE_SETUP_SCRIPT"
-            else
-                CLAUDE_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/claude-code-setup.sh"
-                echo "Downloading claude-code-setup.sh..."
-                curl -fsSL "$CLAUDE_SETUP_URL" -o /tmp/claude-code-setup.sh
-                bash /tmp/claude-code-setup.sh
-                rm -f /tmp/claude-code-setup.sh
-            fi
-
-            show_realtime_footer
-            echo -e "  ${GREEN}✓ MCP servers configured${NC}"
+        if [ "$MISSING_MCP_COUNT" -eq 0 ]; then
+            # All MCPs already configured - no prompt needed
+            echo -e "\n  ${GREEN}All MCP servers already configured!${NC}"
         else
-            log_skipped "MCP servers"
+            # Some MCPs missing - ask to configure
+            if prompt_optional "Configure $MISSING_MCP_COUNT missing MCP(s)"; then
+                echo -e "  ${CYAN}> Configuring missing MCP servers...${NC}"
+                show_realtime_header
+
+                SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
+                CLAUDE_SETUP_SCRIPT="$SCRIPT_DIR/claude-code-setup.sh"
+
+                if [ -f "$CLAUDE_SETUP_SCRIPT" ]; then
+                    bash "$CLAUDE_SETUP_SCRIPT"
+                else
+                    CLAUDE_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/claude-code-setup.sh"
+                    echo "Downloading claude-code-setup.sh..."
+                    curl -fsSL "$CLAUDE_SETUP_URL" -o /tmp/claude-code-setup.sh
+                    bash /tmp/claude-code-setup.sh
+                    rm -f /tmp/claude-code-setup.sh
+                fi
+
+                show_realtime_footer
+                echo -e "  ${GREEN}✓ MCP servers configured${NC}"
+            else
+                log_skipped "MCP servers"
+            fi
         fi
     else
         echo -e "  ${YELLOW}○ Not installed${NC}"
@@ -483,11 +556,57 @@ else
         fi
     fi
 
-    echo -e "\n  ${CYAN}Progress: ${WHITE}7.5/8${NC} (94%)"
+    echo -e "\n  ${CYAN}Progress: ${WHITE}7.33/9${NC} (81%)"
+    echo -e "  ${CYAN}────────────────────────────────${NC}"
+
+    # --- Modern CLI Tools ---
+    echo -e "\n${MAGENTA}[Optional 2/3] Modern CLI Tools${NC}"
+    echo -e "  ${GRAY}(fzf, ripgrep, fd, bat, eza, zoxide)${NC}"
+
+    # Check if most tools are already installed
+    CLI_TOOLS_INSTALLED=0
+    command_exists fzf && CLI_TOOLS_INSTALLED=$((CLI_TOOLS_INSTALLED + 1))
+    command_exists rg && CLI_TOOLS_INSTALLED=$((CLI_TOOLS_INSTALLED + 1))
+    (command_exists fd || command_exists fdfind) && CLI_TOOLS_INSTALLED=$((CLI_TOOLS_INSTALLED + 1))
+    (command_exists bat || command_exists batcat) && CLI_TOOLS_INSTALLED=$((CLI_TOOLS_INSTALLED + 1))
+    command_exists eza && CLI_TOOLS_INSTALLED=$((CLI_TOOLS_INSTALLED + 1))
+    command_exists zoxide && CLI_TOOLS_INSTALLED=$((CLI_TOOLS_INSTALLED + 1))
+
+    if [ "$CLI_TOOLS_INSTALLED" -eq 6 ]; then
+        echo -e "  ${GREEN}✓ All CLI tools already installed${NC}"
+        log_installed "Modern CLI Tools (all 6)"
+    else
+        echo -e "  ${YELLOW}○ ${CLI_TOOLS_INSTALLED}/6 tools installed${NC}"
+        if prompt_optional "Modern CLI Tools"; then
+            echo -e "  ${CYAN}> Running CLI Tools setup (realtime output)...${NC}"
+            show_realtime_header
+
+            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
+            CLI_TOOLS_SCRIPT="$SCRIPT_DIR/cli-tools-setup.sh"
+
+            if [ -f "$CLI_TOOLS_SCRIPT" ]; then
+                bash "$CLI_TOOLS_SCRIPT"
+            else
+                CLI_TOOLS_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/cli-tools-setup.sh"
+                echo "Downloading cli-tools-setup.sh..."
+                curl -fsSL "$CLI_TOOLS_URL" -o /tmp/cli-tools-setup.sh
+                bash /tmp/cli-tools-setup.sh
+                rm -f /tmp/cli-tools-setup.sh
+            fi
+
+            show_realtime_footer
+            echo -e "  ${GREEN}✓ Modern CLI Tools setup complete${NC}"
+            log_installed "Modern CLI Tools"
+        else
+            log_skipped "Modern CLI Tools"
+        fi
+    fi
+
+    echo -e "\n  ${CYAN}Progress: ${WHITE}7.66/9${NC} (85%)"
     echo -e "  ${CYAN}────────────────────────────────${NC}"
 
     # --- Git Identity Manager ---
-    echo -e "\n${MAGENTA}[Optional 2/2] Git Identity Manager${NC}"
+    echo -e "\n${MAGENTA}[Optional 3/3] Git Identity Manager${NC}"
     if [ -f "$HOME/.git-hooks/pre-commit" ] && [ -f "$HOME/.git-identities" ]; then
         identity_count=$(wc -l < "$HOME/.git-identities")
         echo -e "  ${GREEN}✓ Already configured: $identity_count identities${NC}"
@@ -529,7 +648,7 @@ echo -e "\n${GREEN}========================================${NC}"
 echo -e "${WHITE}   All Setup Complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 
-echo -e "\n  ${CYAN}Progress: ${WHITE}8/8${NC} (100%)"
+echo -e "\n  ${CYAN}Progress: ${WHITE}9/9${NC} (100%)"
 echo -e "  ${CYAN}────────────────────────────────${NC}"
 
 echo -e "\n${GREEN}Final Installed List:${NC}"
