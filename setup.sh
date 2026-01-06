@@ -360,104 +360,31 @@ fi
 update_progress
 
 # ============================================
-# [7/8] Workspace Launcher + Aliases (auto-install, no prompt)
+# [7/8] Workspace Launcher (auto-install, no prompt)
 # ============================================
-echo -e "\n${WHITE}[7/8] Workspace Launcher & Bash Aliases${NC}"
+echo -e "\n${WHITE}[7/8] Workspace Launcher${NC}"
 echo -e "  ${CYAN}> Configuring workspace automation...${NC}"
 {
-    echo -e "  ${CYAN}> Configuring workspace launcher...${NC}"
     show_realtime_header
 
     # Download/run launcher setup
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
-    LAUNCHER_SETUP_SCRIPT="$SCRIPT_DIR/logon-launch-workspace.sh"
+    LAUNCHER_SETUP_SCRIPT="$SCRIPT_DIR/def/logon-launch-workspace.sh"
 
     if [ -f "$LAUNCHER_SETUP_SCRIPT" ]; then
         echo "Running local logon-launch-workspace.sh..."
         bash "$LAUNCHER_SETUP_SCRIPT"
     else
-        LAUNCHER_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/logon-launch-workspace.sh"
+        LAUNCHER_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/def/logon-launch-workspace.sh"
         echo "Downloading logon-launch-workspace.sh..."
         curl -fsSL "$LAUNCHER_SETUP_URL" -o /tmp/logon-launch-workspace.sh
         bash /tmp/logon-launch-workspace.sh
         rm -f /tmp/logon-launch-workspace.sh
     fi
 
-    # Setup bash aliases
-    echo ""
-    echo "Configuring bash aliases..."
-
-    START_MARKER="# >>> REGGIE-WORKSPACE-ALIASES >>>"
-    END_MARKER="# <<< REGGIE-WORKSPACE-ALIASES <<<"
-
-    ALIASES_CONTENT="$START_MARKER
-# Git Aliases
-alias gs='git status'
-alias ga='git add'
-alias gp='git push'
-alias gl='git log --oneline --decorate --graph'
-alias gd='git diff'
-alias gco='git checkout'
-alias gb='git branch'
-alias gpull='git pull'
-alias gc='git commit'
-
-gsw() {
-    git switch "$@"
-}
-
-gr() {
-    git remote "$@"
-}
-
-gcp() {
-    git cherry-pick "$@"
-}
-
-# personal shortcuts
-alias ~='cd ~'
-alias ..='cd ..'
-alias ...='cd ../..'
-alias te='gnome-text-editor'
-alias claude='claude --dangerously-skip-permissions'
-alias folders='nautilus &'
-alias t='tldr'
-alias cat='batcat
-alias m='micro'
-alias ls='exa'
-
-# ls aliases
-alias ll='ls -alF'
-alias la='ls -A'
-alias l='ls -CF'
-
-# Common commands
-alias cls='clear'
-alias md='mkdir -p'
-
-# Safety aliases
-alias rm='rm -i'
-alias cp='cp -i'
-alias mv='mv -i'
-$END_MARKER"
-
-    BASHRC="$HOME/.bashrc"
-
-    if grep -q "$START_MARKER" "$BASHRC" 2>/dev/null; then
-        sed -i "/$START_MARKER/,/$END_MARKER/d" "$BASHRC"
-        echo "$ALIASES_CONTENT" >> "$BASHRC"
-        echo "Updated bash aliases in $BASHRC"
-    else
-        echo "" >> "$BASHRC"
-        echo "$ALIASES_CONTENT" >> "$BASHRC"
-        echo "Added bash aliases to $BASHRC"
-    fi
-
     show_realtime_footer
     echo -e "  ${GREEN}✓ Workspace launcher configured${NC}"
-    echo -e "  ${GREEN}✓ Bash aliases configured${NC}"
     log_installed "Workspace Launcher"
-    log_installed "Bash Aliases"
 }
 update_progress
 
@@ -492,7 +419,7 @@ else
     echo -e "${MAGENTA}========================================${NC}"
 
     # --- Claude Code ---
-    echo -e "\n${MAGENTA}[Optional 1/3] Claude Code${NC}"
+    echo -e "\n${MAGENTA}[Optional 1/4] Claude Code${NC}"
     if command_exists claude; then
         claude_version=$(claude --version 2>/dev/null)
         echo -e "  ${GREEN}✓ Already installed: $claude_version${NC}"
@@ -511,16 +438,16 @@ else
                 show_realtime_header
 
                 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
-                CLAUDE_SETUP_SCRIPT="$SCRIPT_DIR/claude-code-setup.sh"
+                CLAUDE_SETUP_SCRIPT="$SCRIPT_DIR/opt/claude-code.sh"
 
                 if [ -f "$CLAUDE_SETUP_SCRIPT" ]; then
                     bash "$CLAUDE_SETUP_SCRIPT"
                 else
-                    CLAUDE_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/claude-code-setup.sh"
-                    echo "Downloading claude-code-setup.sh..."
-                    curl -fsSL "$CLAUDE_SETUP_URL" -o /tmp/claude-code-setup.sh
-                    bash /tmp/claude-code-setup.sh
-                    rm -f /tmp/claude-code-setup.sh
+                    CLAUDE_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/opt/claude-code.sh"
+                    echo "Downloading claude-code.sh..."
+                    curl -fsSL "$CLAUDE_SETUP_URL" -o /tmp/claude-code.sh
+                    bash /tmp/claude-code.sh
+                    rm -f /tmp/claude-code.sh
                 fi
 
                 show_realtime_footer
@@ -536,16 +463,16 @@ else
             show_realtime_header
 
             SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
-            CLAUDE_SETUP_SCRIPT="$SCRIPT_DIR/claude-code-setup.sh"
+            CLAUDE_SETUP_SCRIPT="$SCRIPT_DIR/opt/claude-code.sh"
 
             if [ -f "$CLAUDE_SETUP_SCRIPT" ]; then
                 bash "$CLAUDE_SETUP_SCRIPT"
             else
-                CLAUDE_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/claude-code-setup.sh"
-                echo "Downloading claude-code-setup.sh..."
-                curl -fsSL "$CLAUDE_SETUP_URL" -o /tmp/claude-code-setup.sh
-                bash /tmp/claude-code-setup.sh
-                rm -f /tmp/claude-code-setup.sh
+                CLAUDE_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/opt/claude-code.sh"
+                echo "Downloading claude-code.sh..."
+                curl -fsSL "$CLAUDE_SETUP_URL" -o /tmp/claude-code.sh
+                bash /tmp/claude-code.sh
+                rm -f /tmp/claude-code.sh
             fi
 
             show_realtime_footer
@@ -560,7 +487,7 @@ else
     echo -e "  ${CYAN}────────────────────────────────${NC}"
 
     # --- Modern CLI Tools ---
-    echo -e "\n${MAGENTA}[Optional 2/3] Modern CLI Tools${NC}"
+    echo -e "\n${MAGENTA}[Optional 2/4] Modern CLI Tools${NC}"
     echo -e "  ${GRAY}(fzf, ripgrep, fd, bat, eza, zoxide)${NC}"
 
     # Check if most tools are already installed
@@ -582,16 +509,16 @@ else
             show_realtime_header
 
             SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
-            CLI_TOOLS_SCRIPT="$SCRIPT_DIR/cli-tools-setup.sh"
+            CLI_TOOLS_SCRIPT="$SCRIPT_DIR/opt/cli-tools.sh"
 
             if [ -f "$CLI_TOOLS_SCRIPT" ]; then
                 bash "$CLI_TOOLS_SCRIPT"
             else
-                CLI_TOOLS_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/cli-tools-setup.sh"
-                echo "Downloading cli-tools-setup.sh..."
-                curl -fsSL "$CLI_TOOLS_URL" -o /tmp/cli-tools-setup.sh
-                bash /tmp/cli-tools-setup.sh
-                rm -f /tmp/cli-tools-setup.sh
+                CLI_TOOLS_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/opt/cli-tools.sh"
+                echo "Downloading cli-tools.sh..."
+                curl -fsSL "$CLI_TOOLS_URL" -o /tmp/cli-tools.sh
+                bash /tmp/cli-tools.sh
+                rm -f /tmp/cli-tools.sh
             fi
 
             show_realtime_footer
@@ -606,7 +533,7 @@ else
     echo -e "  ${CYAN}────────────────────────────────${NC}"
 
     # --- Git Identity Manager ---
-    echo -e "\n${MAGENTA}[Optional 3/3] Git Identity Manager${NC}"
+    echo -e "\n${MAGENTA}[Optional 3/4] Git Identity Manager${NC}"
     if [ -f "$HOME/.git-hooks/pre-commit" ] && [ -f "$HOME/.git-identities" ]; then
         identity_count=$(wc -l < "$HOME/.git-identities")
         echo -e "  ${GREEN}✓ Already configured: $identity_count identities${NC}"
@@ -618,16 +545,16 @@ else
             show_realtime_header
 
             SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
-            GIT_IDENTITY_SCRIPT="$SCRIPT_DIR/git-identity-setup.sh"
+            GIT_IDENTITY_SCRIPT="$SCRIPT_DIR/opt/git-identity.sh"
 
             if [ -f "$GIT_IDENTITY_SCRIPT" ]; then
                 bash "$GIT_IDENTITY_SCRIPT"
             else
-                GIT_IDENTITY_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/git-identity-setup.sh"
-                echo "Downloading git-identity-setup.sh..."
-                curl -fsSL "$GIT_IDENTITY_URL" -o /tmp/git-identity-setup.sh
-                bash /tmp/git-identity-setup.sh
-                rm -f /tmp/git-identity-setup.sh
+                GIT_IDENTITY_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/opt/git-identity.sh"
+                echo "Downloading git-identity.sh..."
+                curl -fsSL "$GIT_IDENTITY_URL" -o /tmp/git-identity.sh
+                bash /tmp/git-identity.sh
+                rm -f /tmp/git-identity.sh
             fi
 
             show_realtime_footer
@@ -635,6 +562,42 @@ else
             log_installed "Git Identity Manager"
         else
             log_skipped "Git Identity Manager"
+        fi
+    fi
+
+    echo -e "\n  ${CYAN}Progress: ${WHITE}8/9${NC} (89%)"
+    echo -e "  ${CYAN}────────────────────────────────${NC}"
+
+    # --- Bash Aliases ---
+    echo -e "\n${MAGENTA}[Optional 4/4] Bash Aliases${NC}"
+    echo -e "  ${GRAY}(git shortcuts, navigation, safety aliases)${NC}"
+    if grep -q "REGGIE-WORKSPACE-ALIASES" "$HOME/.bashrc" 2>/dev/null; then
+        echo -e "  ${GREEN}✓ Already configured${NC}"
+        log_installed "Bash Aliases"
+    else
+        echo -e "  ${YELLOW}○ Not configured${NC}"
+        if prompt_optional "Bash Aliases"; then
+            echo -e "  ${CYAN}> Running Bash Aliases setup (realtime output)...${NC}"
+            show_realtime_header
+
+            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
+            ALIASES_SCRIPT="$SCRIPT_DIR/opt/aliases.sh"
+
+            if [ -f "$ALIASES_SCRIPT" ]; then
+                bash "$ALIASES_SCRIPT"
+            else
+                ALIASES_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/opt/aliases.sh"
+                echo "Downloading aliases.sh..."
+                curl -fsSL "$ALIASES_URL" -o /tmp/aliases.sh
+                bash /tmp/aliases.sh
+                rm -f /tmp/aliases.sh
+            fi
+
+            show_realtime_footer
+            echo -e "  ${GREEN}✓ Bash Aliases setup complete${NC}"
+            log_installed "Bash Aliases"
+        else
+            log_skipped "Bash Aliases"
         fi
     fi
 
