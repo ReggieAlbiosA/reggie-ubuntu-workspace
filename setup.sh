@@ -1,6 +1,6 @@
 #!/bin/bash
 # setup.sh
-# Run with: curl -fsSL https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/setup.sh | bash
+# Run with: curl -fsSL https://raw.githubusercontent.com/ReggieAlbiosA/reggie-ubuntu-workspace/main/setup.sh | bash
 #
 # Install overrides:
 #   -y, --yes           Auto-accept all prompts
@@ -375,7 +375,7 @@ echo -e "  ${CYAN}> Configuring workspace automation...${NC}"
         echo "Running local logon-launch-workspace.sh..."
         bash "$LAUNCHER_SETUP_SCRIPT"
     else
-        LAUNCHER_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/def/logon-launch-workspace.sh"
+        LAUNCHER_SETUP_URL="https://raw.githubusercontent.com/ReggieAlbiosA/reggie-ubuntu-workspace/main/def/logon-launch-workspace.sh"
         echo "Downloading logon-launch-workspace.sh..."
         curl -fsSL "$LAUNCHER_SETUP_URL" -o /tmp/logon-launch-workspace.sh
         bash /tmp/logon-launch-workspace.sh
@@ -443,7 +443,7 @@ else
                 if [ -f "$CLAUDE_SETUP_SCRIPT" ]; then
                     bash "$CLAUDE_SETUP_SCRIPT"
                 else
-                    CLAUDE_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/opt/claude-code.sh"
+                    CLAUDE_SETUP_URL="https://raw.githubusercontent.com/ReggieAlbiosA/reggie-ubuntu-workspace/main/opt/claude-code.sh"
                     echo "Downloading claude-code.sh..."
                     curl -fsSL "$CLAUDE_SETUP_URL" -o /tmp/claude-code.sh
                     bash /tmp/claude-code.sh
@@ -468,7 +468,7 @@ else
             if [ -f "$CLAUDE_SETUP_SCRIPT" ]; then
                 bash "$CLAUDE_SETUP_SCRIPT"
             else
-                CLAUDE_SETUP_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/opt/claude-code.sh"
+                CLAUDE_SETUP_URL="https://raw.githubusercontent.com/ReggieAlbiosA/reggie-ubuntu-workspace/main/opt/claude-code.sh"
                 echo "Downloading claude-code.sh..."
                 curl -fsSL "$CLAUDE_SETUP_URL" -o /tmp/claude-code.sh
                 bash /tmp/claude-code.sh
@@ -514,7 +514,7 @@ else
             if [ -f "$CLI_TOOLS_SCRIPT" ]; then
                 bash "$CLI_TOOLS_SCRIPT"
             else
-                CLI_TOOLS_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/opt/cli-tools.sh"
+                CLI_TOOLS_URL="https://raw.githubusercontent.com/ReggieAlbiosA/reggie-ubuntu-workspace/main/opt/cli-tools.sh"
                 echo "Downloading cli-tools.sh..."
                 curl -fsSL "$CLI_TOOLS_URL" -o /tmp/cli-tools.sh
                 bash /tmp/cli-tools.sh
@@ -550,7 +550,7 @@ else
             if [ -f "$GIT_IDENTITY_SCRIPT" ]; then
                 bash "$GIT_IDENTITY_SCRIPT"
             else
-                GIT_IDENTITY_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/opt/git-identity.sh"
+                GIT_IDENTITY_URL="https://raw.githubusercontent.com/ReggieAlbiosA/reggie-ubuntu-workspace/main/opt/git-identity.sh"
                 echo "Downloading git-identity.sh..."
                 curl -fsSL "$GIT_IDENTITY_URL" -o /tmp/git-identity.sh
                 bash /tmp/git-identity.sh
@@ -586,7 +586,7 @@ else
             if [ -f "$ALIASES_SCRIPT" ]; then
                 bash "$ALIASES_SCRIPT"
             else
-                ALIASES_URL="https://raw.githubusercontent.com/blueivy828/reggie-ubuntu-workspace/main/opt/aliases.sh"
+                ALIASES_URL="https://raw.githubusercontent.com/ReggieAlbiosA/reggie-ubuntu-workspace/main/opt/aliases.sh"
                 echo "Downloading aliases.sh..."
                 curl -fsSL "$ALIASES_URL" -o /tmp/aliases.sh
                 bash /tmp/aliases.sh

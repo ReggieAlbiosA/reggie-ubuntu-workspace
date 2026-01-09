@@ -87,7 +87,8 @@ alias reboot='systemctl reboot'
 alias poff='systemctl poweroff'
 alias ubash='source ~/.bashrc'
 alias sbash='source /etc/bash.bashrc'
-alias docker lun='nohup /opt/docker-desktop/bin/docker-desktop >/dev/null 2>&1 & >/dev/null 2>&1 &'
+alias dockerlun='nohup /opt/docker-desktop/bin/docker-desktop >/dev/null 2>&1 & >/dev/null 2>&1 &'
+
 
 
 
@@ -234,8 +235,6 @@ alias rm='rm -i'
 alias cp='cp -i'
 alias mv='mv -i'
 # <<< REGGIE-WORKSPACE-ALIASES <<<
-
-echo 'eval "$(zoxide init bash)"' >> ~/.bashrc
 EOF
 
 # ============================================
