@@ -107,10 +107,28 @@ install_claude_code() {
 #######################################
 # MCP Helpers
 #######################################
+
+# Detect if Python MCP manager is available
+use_python_mcp_manager() {
+    [[ -x "$(dirname "${BASH_SOURCE[0]}")/../scripts/mcp_manager.py" ]] && command_exists python3
+}
+
 get_mcp_status() {
     local name="$1"
-    local output
 
+    # Use Python MCP manager if available (better parsing)
+    if use_python_mcp_manager; then
+        local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        local status
+        status=$(python3 "$script_dir/../scripts/mcp_manager.py" list 2>/dev/null | grep "^✓ $name:" && echo "connected" || \
+                 python3 "$script_dir/../scripts/mcp_manager.py" list 2>/dev/null | grep "^✗ $name:" && echo "failed" || \
+                 echo "missing")
+        echo "$status"
+        return
+    fi
+
+    # Fallback to bash parsing
+    local output
     output="$(claude mcp list 2>/dev/null || true)"
 
     if grep -Fq "$name:" <<<"$output"; then
@@ -151,6 +169,45 @@ install_github_mcp() {
 #######################################
 add_mcp_servers() {
     echo -e "\n${NC}[4/4] Configuring MCP Servers (${MCP_SCOPE})...${NC}"
+
+    # Try using Python MCP manager for better experience
+    if use_python_mcp_manager; then
+        local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        echo -e "${CYAN}Using enhanced Python MCP manager...${NC}"
+
+        # Show status with Python tool
+        python3 "$script_dir/../scripts/mcp_manager.py" status
+
+        # Get missing servers
+        local missing_output
+        missing_output=$(python3 "$script_dir/../scripts/mcp_manager.py" list 2>/dev/null | grep "^○" | awk '{print $2}' | tr -d ':')
+
+        if [[ -z "$missing_output" ]]; then
+            echo -e "${GREEN}All MCP servers already configured.${NC}"
+            return
+        fi
+
+        prompt_yes_no "Install missing MCP servers?" || return
+
+        # Get GitHub token if needed
+        local github_token=""
+        if echo "$missing_output" | grep -q "github"; then
+            read -rsp "  > Enter GitHub Personal Access Token (or Enter to skip): " github_token
+            echo
+        fi
+
+        # Use Python to install (better structured)
+        if [[ -n "$github_token" ]]; then
+            python3 "$script_dir/../scripts/mcp_manager.py" install --scope "$MCP_SCOPE" --github-token "$github_token"
+        else
+            python3 "$script_dir/../scripts/mcp_manager.py" install --scope "$MCP_SCOPE"
+        fi
+
+        return
+    fi
+
+    # Fallback to bash implementation
+    echo -e "${YELLOW}Note: Install Python for enhanced MCP management${NC}"
 
     local missing=()
 

@@ -137,6 +137,69 @@ show_realtime_footer() {
     echo -e "  ${YELLOW}└───────────────────────┘${NC}"
 }
 
+#######################################
+# Enhanced Tools Detection
+#######################################
+check_enhanced_tools() {
+    local has_enhancements=false
+
+    echo -e "\n${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}  Enhanced Tools Status${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+    # Check Go CLI (ruw)
+    if command_exists ruw; then
+        echo -e "  ${GREEN}✓ Go CLI (ruw)${NC} - $(ruw version 2>/dev/null | head -1 || echo 'installed')"
+        has_enhancements=true
+    else
+        echo -e "  ${YELLOW}○ Go CLI (ruw)${NC} - not installed"
+        echo -e "    ${GRAY}Build with: cd cmd/ruw && make install${NC}"
+    fi
+
+    # Check Python utilities
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [[ -x "$SCRIPT_DIR/scripts/mcp_manager.py" ]] && command_exists python3; then
+        echo -e "  ${GREEN}✓ Python utilities${NC} - available"
+        echo -e "    ${GRAY}• MCP Manager${NC}"
+        echo -e "    ${GRAY}• Git Identity Manager${NC}"
+        echo -e "    ${GRAY}• Config Validator${NC}"
+        has_enhancements=true
+    else
+        echo -e "  ${YELLOW}○ Python utilities${NC} - not available"
+    fi
+
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+    if [ "$has_enhancements" = true ]; then
+        echo -e "${GREEN}Enhanced tools detected! You'll get improved experience.${NC}\n"
+    else
+        echo -e "${YELLOW}No enhanced tools detected. Using standard bash implementation.${NC}"
+        echo -e "${YELLOW}For better experience, see BUILD_AND_INSTALL.md${NC}\n"
+    fi
+}
+
+# Validate configuration if Python validator available
+validate_configuration() {
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    if [[ -x "$SCRIPT_DIR/scripts/config_validator.py" ]] && command_exists python3; then
+        echo -e "${CYAN}Running configuration validation...${NC}"
+
+        if python3 "$SCRIPT_DIR/scripts/config_validator.py" "$SCRIPT_DIR"; then
+            echo -e "${GREEN}✓ Configuration validation passed${NC}\n"
+            return 0
+        else
+            echo -e "${YELLOW}⚠  Configuration validation found issues${NC}"
+            read -p "Continue anyway? (y/n): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo -e "${RED}Setup cancelled${NC}"
+                exit 1
+            fi
+        fi
+    fi
+}
+
 # Get MCP server status using claude mcp list
 get_mcp_status() {
     local server_name="$1"
@@ -197,6 +260,12 @@ fi
 if [ "$SKIP_OPTIONAL" = true ]; then
     echo -e "${GRAY}  Mode: Skip optional modules${NC}"
 fi
+
+# Check for enhanced tools (Go CLI, Python utilities)
+check_enhanced_tools
+
+# Validate configuration if available
+validate_configuration
 
 echo -e "\n${CYAN}You will be prompted for each installation.${NC}"
 

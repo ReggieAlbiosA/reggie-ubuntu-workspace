@@ -15,6 +15,7 @@ NC='\033[0m' # No Color
 
 # File paths
 IDENTITIES_FILE="$HOME/.git-identities"
+IDENTITIES_JSON="$HOME/.git-identities.json"
 HOOKS_DIR="$HOME/.git-hooks"
 HOOK_FILE="$HOOKS_DIR/pre-commit"
 
@@ -22,6 +23,63 @@ HOOK_FILE="$HOOKS_DIR/pre-commit"
 command_exists() {
     command -v "$1" &> /dev/null
 }
+
+#######################################
+# Enhanced Mode Detection
+#######################################
+use_python_identity_manager() {
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    [[ -x "$script_dir/../scripts/git_identity.py" ]] && command_exists python3
+}
+
+# Prefer Python version if available (better UX, structured data)
+if use_python_identity_manager; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}Using enhanced Python Git Identity Manager${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+
+    # Migrate old format if exists
+    if [[ -f "$IDENTITIES_FILE" ]] && [[ ! -f "$IDENTITIES_JSON" ]]; then
+        echo -e "${YELLOW}Migrating old format to JSON...${NC}"
+        python3 <<PYTHON
+import json
+from pathlib import Path
+
+old_file = Path("$IDENTITIES_FILE")
+new_file = Path("$IDENTITIES_JSON")
+
+identities = []
+with open(old_file) as f:
+    for line in f:
+        if '|' in line:
+            parts = line.strip().split('|')
+            if len(parts) >= 3:
+                identities.append({
+                    "email": parts[0],
+                    "name": parts[1],
+                    "label": parts[2]
+                })
+
+if identities:
+    with open(new_file, 'w') as f:
+        json.dump({"identities": identities}, f, indent=2)
+    print(f"✓ Migrated {len(identities)} identities to {new_file}")
+    old_file.rename(Path.home() / ".git-identities.bak")
+    print("✓ Old file backed up as ~/.git-identities.bak")
+PYTHON
+    fi
+
+    # Run Python version
+    exec python3 "$SCRIPT_DIR/../scripts/git_identity.py" select
+    exit 0
+fi
+
+# Fallback message
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}Using legacy bash version${NC}"
+echo -e "${YELLOW}Tip: Python version offers better experience!${NC}"
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 
 # Helper function to validate email format
 validate_email() {
