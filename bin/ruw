@@ -18,9 +18,10 @@ NC='\033[0m'
 # ============================================
 # Config
 # ============================================
-VERSION="1.0.0"
+VERSION="1.1.0"
 CONFIG_DIR="$HOME/.config/ruw"
 WORKSPACE_PATH_FILE="$CONFIG_DIR/workspace-path"
+LAST_APPLIED_FILE="$CONFIG_DIR/last-applied"
 EXPECTED_REMOTE="https://github.com/ReggieAlbiosA/reggie-ubuntu-workspace.git"
 
 # ============================================
@@ -65,6 +66,85 @@ find_workspace() {
 }
 
 # ============================================
+# Update Detection & Application
+# ============================================
+
+# Get list of changed files (setup-related only)
+get_changed_files() {
+    local last_applied="$1"
+    local workspace="$2"
+    local changed_files=""
+
+    cd "$workspace"
+
+    # A. Committed changes (since last applied)
+    if [ -n "$last_applied" ] && git rev-parse "$last_applied" &>/dev/null 2>&1; then
+        local committed=$(git diff --name-only "$last_applied"..HEAD 2>/dev/null)
+        changed_files="$committed"
+    fi
+
+    # B. Uncommitted changes (staged + unstaged + untracked)
+    local uncommitted=$(git status --porcelain 2>/dev/null | awk '{print $2}')
+
+    # Merge and deduplicate, filter to setup-related files
+    echo -e "$changed_files\n$uncommitted" | grep -E "^(setup\.sh|def/|opt/|bin/)" | sort -u | grep -v "^$"
+}
+
+# Apply a single changed file
+apply_change() {
+    local file="$1"
+    local workspace="$2"
+
+    case "$file" in
+        setup.sh)
+            echo -e "  ${CYAN}→${NC} Running full setup.sh"
+            bash "$workspace/setup.sh" "${SETUP_FLAGS[@]}"
+            ;;
+        def/*.sh)
+            echo -e "  ${CYAN}→${NC} Running $file"
+            bash "$workspace/$file"
+            ;;
+        opt/*.sh)
+            echo -e "  ${CYAN}→${NC} Running $file"
+            bash "$workspace/$file"
+            ;;
+        bin/ruw)
+            echo -e "  ${CYAN}→${NC} Updating $file"
+            cp "$workspace/$file" "$HOME/.local/bin/ruw"
+            chmod +x "$HOME/.local/bin/ruw"
+            ;;
+        bin/*)
+            echo -e "  ${CYAN}→${NC} Updating $file"
+            local filename=$(basename "$file")
+            cp "$workspace/$file" "$HOME/.local/bin/$filename"
+            chmod +x "$HOME/.local/bin/$filename"
+            ;;
+    esac
+}
+
+# Save last-applied SHA (only if working tree is clean)
+save_last_applied() {
+    local workspace="$1"
+    cd "$workspace"
+    mkdir -p "$CONFIG_DIR"
+
+    # Only save if working tree is clean
+    if [ -z "$(git status --porcelain 2>/dev/null)" ]; then
+        git rev-parse HEAD > "$LAST_APPLIED_FILE"
+        echo -e "${GRAY}Saved last-applied: $(cat $LAST_APPLIED_FILE | cut -c1-7)${NC}"
+    else
+        echo -e "${GRAY}Uncommitted changes present - not updating last-applied SHA${NC}"
+    fi
+}
+
+# Get all setup-related scripts for --force mode
+get_all_scripts() {
+    local workspace="$1"
+    find "$workspace/def" -name "*.sh" 2>/dev/null | sed "s|$workspace/||"
+    find "$workspace/opt" -name "*.sh" 2>/dev/null | sed "s|$workspace/||"
+}
+
+# ============================================
 # Action Handlers
 # ============================================
 do_local_update() {
@@ -85,10 +165,209 @@ do_local_update() {
     fi
 
     echo -e "${GREEN}Found workspace: $workspace_path${NC}"
-    echo -e "${CYAN}Running setup.sh ${SETUP_FLAGS[*]}${NC}\n"
 
+    # Handle --force mode: reinstall all modules
+    if [ "$FORCE" = true ]; then
+        echo -e "${YELLOW}Force mode: Reinstalling all modules...${NC}"
+        echo ""
+
+        local all_scripts=$(get_all_scripts "$workspace_path")
+        local count=0
+
+        echo -e "${WHITE}Applying all modules:${NC}"
+        while IFS= read -r script; do
+            [ -z "$script" ] && continue
+            apply_change "$script" "$workspace_path"
+            count=$((count + 1))
+        done <<< "$all_scripts"
+
+        echo ""
+        echo -e "${GREEN}Done. $count modules reinstalled.${NC}"
+        save_last_applied "$workspace_path"
+        return 0
+    fi
+
+    # Normal mode: detect changes
+    echo -e "${CYAN}Checking for updates...${NC}"
+
+    # Read last-applied SHA
+    local last_applied=""
+    if [ -f "$LAST_APPLIED_FILE" ]; then
+        last_applied=$(cat "$LAST_APPLIED_FILE")
+        echo -e "${GRAY}Last applied: ${last_applied:0:7}${NC}"
+    else
+        echo -e "${GRAY}First run - no previous state${NC}"
+    fi
+
+    # Get changed files
+    local changed_files=$(get_changed_files "$last_applied" "$workspace_path")
+
+    if [ -z "$changed_files" ]; then
+        echo ""
+        echo -e "${GREEN}Already up to date.${NC}"
+        # Still save SHA if this is first run
+        if [ ! -f "$LAST_APPLIED_FILE" ]; then
+            save_last_applied "$workspace_path"
+        fi
+        return 0
+    fi
+
+    # Show what changed
+    echo ""
+    echo -e "${WHITE}Found changed modules:${NC}"
+    local count=0
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        # Check if it's uncommitted or committed
+        cd "$workspace_path"
+        if git status --porcelain 2>/dev/null | grep -q "$file"; then
+            echo -e "  ${YELLOW}•${NC} $file ${GRAY}(local changes)${NC}"
+        else
+            echo -e "  ${CYAN}•${NC} $file ${GRAY}(committed)${NC}"
+        fi
+        count=$((count + 1))
+    done <<< "$changed_files"
+
+    echo ""
+
+    # Prompt user (unless -y flag)
+    if [ "$AUTO_YES" != true ]; then
+        read -p "Apply $count update(s)? (y/n): " -r confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}Cancelled.${NC}"
+            return 0
+        fi
+    else
+        echo -e "${CYAN}Auto-accepting updates...${NC}"
+    fi
+
+    # Apply changes
+    echo ""
+    echo -e "${WHITE}Applying...${NC}"
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        apply_change "$file" "$workspace_path"
+    done <<< "$changed_files"
+
+    echo ""
+    echo -e "${GREEN}Done. $count module(s) updated.${NC}"
+    save_last_applied "$workspace_path"
+}
+
+do_remote_update() {
+    echo -e "${CYAN}ruw: Finding workspace...${NC}"
+
+    local workspace_path
+    if ! workspace_path=$(find_workspace); then
+        echo -e "${RED}Error: Could not find reggie-ubuntu-workspace${NC}"
+        echo -e "${YELLOW}Searched locations:${NC}"
+        echo "  - ~/Documents/reggie-ubuntu-workspace"
+        echo "  - ~/reggie-ubuntu-workspace"
+        echo "  - ~/workspace/reggie-ubuntu-workspace"
+        echo "  - ~/dev/reggie-ubuntu-workspace"
+        echo "  - ~/projects/reggie-ubuntu-workspace"
+        echo ""
+        echo -e "${CYAN}Please ensure the workspace is cloned to one of these locations.${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}Found workspace: $workspace_path${NC}"
     cd "$workspace_path"
-    bash setup.sh "${SETUP_FLAGS[@]}"
+
+    # Check for uncommitted changes
+    local dirty=$(git status --porcelain 2>/dev/null)
+    if [ -n "$dirty" ]; then
+        if [ "$FORCE" = true ]; then
+            echo -e "${YELLOW}Stashing local changes...${NC}"
+            git stash push -m "ruw-remote-update-autostash"
+        else
+            echo -e "${RED}Error: You have uncommitted changes${NC}"
+            echo -e "${GRAY}Commit or stash them first, or use --force to auto-stash${NC}"
+            echo ""
+            git status --short
+            exit 1
+        fi
+    fi
+
+    # Fetch remote
+    echo -e "${CYAN}Fetching from origin...${NC}"
+    git fetch origin main 2>/dev/null || git fetch origin master 2>/dev/null || {
+        echo -e "${RED}Error: Failed to fetch from remote${NC}"
+        exit 1
+    }
+
+    # Determine remote branch
+    local remote_branch="origin/main"
+    if ! git rev-parse "$remote_branch" &>/dev/null 2>&1; then
+        remote_branch="origin/master"
+    fi
+
+    # Compare HEAD with remote
+    local incoming=$(git diff --name-only HEAD.."$remote_branch" 2>/dev/null | grep -E "^(setup\.sh|def/|opt/|bin/)")
+
+    if [ -z "$incoming" ]; then
+        echo ""
+        echo -e "${GREEN}Already up to date with remote.${NC}"
+
+        # Unstash if we stashed earlier
+        if [ "$FORCE" = true ] && [ -n "$dirty" ]; then
+            echo -e "${CYAN}Restoring stashed changes...${NC}"
+            git stash pop
+        fi
+        return 0
+    fi
+
+    # Show incoming changes
+    echo ""
+    echo -e "${WHITE}Found updates from remote:${NC}"
+    local count=0
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        echo -e "  ${CYAN}•${NC} $file"
+        count=$((count + 1))
+    done <<< "$incoming"
+
+    echo ""
+
+    # Prompt user (unless -y flag)
+    if [ "$AUTO_YES" != true ]; then
+        read -p "Pull and apply $count update(s)? (y/n): " -r confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}Cancelled.${NC}"
+            # Unstash if we stashed
+            if [ "$FORCE" = true ] && [ -n "$dirty" ]; then
+                echo -e "${CYAN}Restoring stashed changes...${NC}"
+                git stash pop
+            fi
+            return 0
+        fi
+    else
+        echo -e "${CYAN}Auto-accepting updates...${NC}"
+    fi
+
+    # Pull
+    echo ""
+    echo -e "${CYAN}Pulling from remote...${NC}"
+    git pull origin main 2>/dev/null || git pull origin master 2>/dev/null
+
+    # Apply changes
+    echo ""
+    echo -e "${WHITE}Applying...${NC}"
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        apply_change "$file" "$workspace_path"
+    done <<< "$incoming"
+
+    # Unstash if we stashed
+    if [ "$FORCE" = true ] && [ -n "$dirty" ]; then
+        echo ""
+        echo -e "${CYAN}Restoring stashed changes...${NC}"
+        git stash pop
+    fi
+
+    echo ""
+    echo -e "${GREEN}Done. Synced with remote ($count module(s) updated).${NC}"
+    save_last_applied "$workspace_path"
 }
 
 show_help() {
@@ -96,19 +375,25 @@ show_help() {
     echo -e "${CYAN}Version $VERSION${NC}"
     echo ""
     echo "Usage:"
-    echo "  ruw --local-update [options]    Update workspace locally"
+    echo "  ruw --local-update [options]    Apply local changes (uncommitted + committed)"
+    echo "  ruw --remote-update [options]   Pull from remote and apply changes"
     echo "  ruw --help                      Show this help"
     echo "  ruw --version                   Show version"
     echo ""
-    echo "Options (pass through to setup.sh):"
+    echo "Options:"
     echo "  -y, --yes                       Auto-accept all prompts"
-    echo "  --skip-optional                 Skip optional modules"
+    echo "  --force, -f                     Force mode:"
+    echo "                                    --local-update: reinstall all modules"
+    echo "                                    --remote-update: auto-stash local changes"
+    echo "  --skip-optional                 Skip optional modules (setup.sh passthrough)"
     echo "  --defaults-only                 Same as --skip-optional"
     echo ""
     echo "Examples:"
-    echo "  ruw --local-update              Interactive update"
+    echo "  ruw --local-update              Detect and apply local changes"
     echo "  ruw --local-update -y           Auto-accept all prompts"
-    echo "  ruw --local-update --skip-optional    Update core only"
+    echo "  ruw --local-update --force      Reinstall all modules"
+    echo "  ruw --remote-update             Pull and apply remote changes"
+    echo "  ruw --remote-update --force     Auto-stash local changes, then pull"
 }
 
 show_version() {
@@ -120,11 +405,21 @@ show_version() {
 # ============================================
 ACTION=""
 SETUP_FLAGS=()
+FORCE=false
+AUTO_YES=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --local-update)
             ACTION="local-update"
+            shift
+            ;;
+        --remote-update)
+            ACTION="remote-update"
+            shift
+            ;;
+        --force|-f)
+            FORCE=true
             shift
             ;;
         --help|-h)
@@ -135,7 +430,12 @@ while [[ $# -gt 0 ]]; do
             ACTION="version"
             shift
             ;;
-        -y|--yes|--skip-optional|--defaults-only)
+        -y|--yes)
+            AUTO_YES=true
+            SETUP_FLAGS+=("$1")
+            shift
+            ;;
+        --skip-optional|--defaults-only)
             # Pass through to setup.sh
             SETUP_FLAGS+=("$1")
             shift
@@ -160,6 +460,9 @@ fi
 case $ACTION in
     local-update)
         do_local_update
+        ;;
+    remote-update)
+        do_remote_update
         ;;
     help)
         show_help

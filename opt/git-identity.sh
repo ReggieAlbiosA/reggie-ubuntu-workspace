@@ -213,6 +213,7 @@ show_menu() {
     done < "$IDENTITIES_FILE"
 
     echo "a) Add new identity"
+    echo "r) Remove identity"
     echo "Enter) Keep current"
     echo ""
 }
@@ -263,6 +264,61 @@ add_identity() {
     echo ""
 }
 
+# Function to remove identity
+remove_identity() {
+    local count=$(wc -l < "$IDENTITIES_FILE")
+
+    if [ "$count" -le 1 ]; then
+        echo ""
+        echo "Cannot remove - at least one identity is required"
+        echo ""
+        return
+    fi
+
+    echo ""
+    echo "--- Remove Identity ---"
+    echo "Current identities:"
+    while IFS=: read -r num name email label; do
+        echo "$num) $label ($email)"
+    done < "$IDENTITIES_FILE"
+    echo ""
+
+    read -p "Enter number to remove (or press Enter to cancel): " choice < /dev/tty
+
+    if [ -z "$choice" ]; then
+        echo "Cancelled"
+        echo ""
+        return
+    fi
+
+    # Validate selection
+    local selected=$(grep "^$choice:" "$IDENTITIES_FILE")
+    if [ -z "$selected" ]; then
+        echo "Invalid selection"
+        echo ""
+        return
+    fi
+
+    local removed_label=$(echo "$selected" | cut -d: -f4)
+    local removed_email=$(echo "$selected" | cut -d: -f3)
+
+    # Remove the line and renumber
+    grep -v "^$choice:" "$IDENTITIES_FILE" > "$IDENTITIES_FILE.tmp"
+
+    # Renumber remaining identities
+    local new_num=1
+    > "$IDENTITIES_FILE"
+    while IFS=: read -r _ name email label; do
+        echo "$new_num:$name:$email:$label" >> "$IDENTITIES_FILE"
+        new_num=$((new_num + 1))
+    done < "$IDENTITIES_FILE.tmp"
+    rm -f "$IDENTITIES_FILE.tmp"
+
+    echo ""
+    echo "Removed: $removed_label ($removed_email)"
+    echo ""
+}
+
 # Main loop
 while true; do
     show_menu
@@ -273,6 +329,12 @@ while true; do
     # Handle 'a' - add new identity
     if [[ "$choice" =~ ^[Aa]$ ]]; then
         add_identity
+        continue
+    fi
+
+    # Handle 'r' - remove identity
+    if [[ "$choice" =~ ^[Rr]$ ]]; then
+        remove_identity
         continue
     fi
 
