@@ -91,17 +91,27 @@ alias ubash='source ~/.bashrc'
 alias sbash='source /etc/bash.bashrc'
 alias dockerlun='nohup /opt/docker-desktop/bin/docker-desktop >/dev/null 2>&1 & >/dev/null 2>&1 &'
 alias ft='file  --mime-type *'
+alias user-packages='apt-mark showmanual'
+alias eb='m ~/.bashrc'
+alias au='m ~/Dev/cli/reggie-ubuntu-workspace/opt/aliases.sh'
+alias docs='cd ~/Documents'
+alias dls='cd ~/Downloads'
+alias dts='cd ~/Desktop'
+ 
+# Safety aliases
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
 
-
-
-
-# ls aliases
-alias ll='ls -alF'
-alias la='ls -A'
-alias l='ls -cF'
-# Common commands
-alias cls='clear'
-alias md='mkdir -p'
+# Function aliases
+clipcopy() {
+  if [ "$1" = "-o" ]; then
+    shift
+    "$@" | xclip -selection clipboard
+  else
+    xclip -selection clipboard < "$1"
+  fi
+}
 
 # CLI tools reference - responsive two-column grid
 cli() {
@@ -232,10 +242,168 @@ cli() {
     fline
 }
 
-# Safety aliases
-alias rm='rm -i'
-alias cp='cp -i'
-alias mv='mv -i'
+
+# Web Tech Stack reference - responsive two-column grid
+my-web-techstack() {
+    local Y='\033[1;33m'   # Yellow (headers)
+    local C='\033[0;36m'   # Cyan (items)
+    local G='\033[0;90m'   # Gray (secondary)
+    local W='\033[1;37m'   # White (borders)
+    local M='\033[0;35m'   # Magenta (category icons)
+    local N='\033[0m'      # Reset
+
+    local width
+    width=$(tput cols)
+    local min_width=70
+
+    if (( width < min_width )); then
+        echo -e "${Y}Terminal too narrow ${width} cols. Resize to ≥ ${min_width}.${N}"
+        return 1
+    fi
+
+    local inner=$((width - 2))
+    local col=$(( (inner - 1) / 2 ))
+    local item_w=$((col - 2))
+
+    repeat_char() {
+        local char="$1" count="$2"
+        for ((i=0; i<count; i++)); do printf '%s' "$char"; done
+    }
+
+    hline() {
+        printf "${W}╔"
+        repeat_char '═' "$inner"
+        printf "╗${N}\n"
+    }
+
+    mline() {
+        printf "${W}╠"
+        repeat_char '═' "$col"
+        printf "╪"
+        repeat_char '═' "$col"
+        printf "╣${N}\n"
+    }
+
+    sline() {
+        printf "${W}╟"
+        repeat_char '─' "$col"
+        printf "┼"
+        repeat_char '─' "$col"
+        printf "╢${N}\n"
+    }
+
+    fline() {
+        printf "${W}╚"
+        repeat_char '═' "$inner"
+        printf "╝${N}\n"
+    }
+
+    title() {
+        local text="$1"
+        local pad=$(( (inner - ${#text} - 2) / 2 ))
+        printf "${W}║${N}"
+        repeat_char ' ' "$pad"
+        printf " ${Y}${text}${N} "
+        repeat_char ' ' $((inner - pad - ${#text} - 2))
+        printf "${W}║${N}\n"
+    }
+
+    header() {
+        printf "${W}║${N} ${M}%-*s${N} ${W}║${N}\n" $((inner - 2)) "$1"
+    }
+
+    row2() {
+        local i1="$1" i2="$2"
+        printf "${W}║${N} ${C}%-*s${N} ${W}│${N} " "$item_w" "$i1"
+        if [[ -n "$i2" ]]; then
+            printf "${C}%-*s${N} ${W}║${N}\n" "$item_w" "$i2"
+        else
+            printf "%-*s ${W}║${N}\n" "$item_w" ""
+        fi
+    }
+
+    row3() {
+        local i1="$1" i2="$2" i3="$3"
+        local tw=$(( (inner - 4) / 3 ))
+        printf "${W}║${N} ${C}%-*s${N} ${G}│${N} ${C}%-*s${N} ${G}│${N} ${C}%-*s${N} ${W}║${N}\n" \
+            "$tw" "$i1" "$tw" "$i2" "$((inner - tw*2 - 6))" "$i3"
+    }
+
+    hline
+    title "🚀 MY WEB TECHNOLOGY STACK"
+    mline
+
+    header "🌐 Core Web Platform"
+    sline
+    row2 "Next.js" "Node.js"
+    row2 "TypeScript" "JavaScript"
+    row2 "HTML" "CSS"
+
+    mline
+    header "🎨 UI & Styling"
+    sline
+    row2 "shadcn/ui" "Tailwind CSS"
+
+    mline
+    header "🔐 Authentication"
+    sline
+    row2 "better-auth" ""
+
+    mline
+    header "🗄️  Databases & Storage"
+    sline
+    row2 "Supabase" "MongoDB"
+    row2 "MySQL" "Cloudflare D1"
+    row2 "Cloudflare R2" "Cloudflare KV"
+
+    mline
+    header "🔌 APIs & Realtime"
+    sline
+    row2 "REST API" "GraphQL"
+    row2 "Socket.IO" ""
+
+    mline
+    header "📊 Data Access"
+    sline
+    row2 "Prisma ORM" ""
+
+    mline
+    header "☁️  Cloud, Infrastructure & Runtime"
+    sline
+    row2 "AWS (SST)" "Cloudflare Workers"
+    row2 "Vercel" "Docker"
+    row2 "Kubernetes" "VMware"
+
+    mline
+    header "🐧 Operating System"
+    sline
+    row2 "Ubuntu Linux" ""
+
+    mline
+    header "📦 Monorepo & Package Management"
+    sline
+    row2 "Turborepo" "pnpm"
+
+    mline
+    header "🧪 Testing"
+    sline
+    row2 "Vitest" ""
+
+    mline
+    header "🔀 Version Control & CI"
+    sline
+    row2 "Git" "GitHub"
+    row2 "GitLab" ""
+
+    mline
+    header "🤖 AI-Assisted Development"
+    sline
+    row2 "OpenAI Codex" "Claude Code"
+    row2 "Google Gemini" ""
+
+    fline
+}
+
 # <<< REGGIE-WORKSPACE-ALIASES <<<
 EOF
 
@@ -254,7 +422,7 @@ if check_aliases_installed; then
 
     # Remove old block and add updated one
     sed -i "/$START_MARKER/,/$END_MARKER/d" "$BASHRC"
-    echo "$ALIASES_CONTENT" >> "$BASHRC"
+    printf '%s\n' "$ALIASES_CONTENT" >> "$BASHRC"
     echo "Updated bash aliases in $BASHRC"
 
     show_realtime_footer
@@ -266,8 +434,8 @@ else
 
     # Add aliases to .bashrc
     echo "" >> "$BASHRC"
-    echo "$ALIASES_CONTENT" >> "$BASHRC"
-    echo "Added bash aliases to $BASHRC"
+    printf '%s\n' "$ALIASES_CONTENT" >> "$BASHRC"
+    echo "Added bash aliases in $BASHRC"
 
     show_realtime_footer
     echo -e "  ${GREEN}✓ Aliases installed${NC}"
@@ -281,9 +449,9 @@ echo -e "\n${GRAY}Configured aliases:${NC}"
 echo -e "  ${GRAY}• Git: gs, ga, gp, gl, gd, gco, gb, gpull, gc, gsw, gr, gcp${NC}"
 echo -e "  ${GRAY}• Navigation: ~, .., ...${NC}"
 echo -e "  ${GRAY}• Tools: te, claude, folders, t, cat, m, ls${NC}"
-echo -e "  ${GRAY}• LS variants: ll, la, l${NC}"
-echo -e "  ${GRAY}• Common: cls, md${NC}"
-echo -e "  ${GRAY}• Help: cli (show CLI tools reference)${NC}"
+echo -e "  ${GRAY}• LS variants: ll, llt${NC}"
+echo -e "  ${GRAY}• System: sleep, reboot, poff${NC}"
+echo -e "  ${GRAY}• Help: cli (CLI tools), my-web-techstack (tech stack)${NC}"
 echo -e "  ${GRAY}• Safety: rm, cp, mv (with -i)${NC}"
 
 echo -e "\n${YELLOW}Restart your terminal or run 'source ~/.bashrc' to apply.${NC}"
