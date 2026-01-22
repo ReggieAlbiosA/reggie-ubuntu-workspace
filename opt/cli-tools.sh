@@ -7,7 +7,7 @@
 #   --reinstall         Force reinstall of already installed tools
 #   --update            Same as --reinstall (update existing tools)
 
-set -e
+# Note: set -e removed to allow graceful error handling - script continues on failures
 
 # Colors
 RED='\033[0;31m'
@@ -80,6 +80,7 @@ show_realtime_footer() {
 INSTALLED_TOOLS=()
 SKIPPED_TOOLS=()
 UPDATED_TOOLS=()
+FAILED_TOOLS=()
 
 log_installed() {
     INSTALLED_TOOLS+=("$1")
@@ -93,13 +94,18 @@ log_updated() {
     UPDATED_TOOLS+=("$1")
 }
 
+log_failed() {
+    FAILED_TOOLS+=("$1")
+    echo -e "  ${RED}✗ Failed: $1${NC}"
+}
+
 # ============================================
 # Tool Installation Functions
 # ============================================
 
 # fzf - Fuzzy finder
 install_fzf() {
-    echo -e "\n${WHITE}[1/6] fzf${NC} ${GRAY}(fuzzy finder)${NC}"
+    echo -e "\n${WHITE}[1/14] fzf${NC} ${GRAY}(fuzzy finder)${NC}"
 
     local already_installed=false
     if command_exists fzf; then
@@ -129,8 +135,8 @@ install_fzf() {
             git clone --depth 1 https://github.com/junegunn/fzf.git "$HOME/.fzf"
         fi
 
-        # Run install script (enables shell integration)
-        "$HOME/.fzf/install" --all --no-update-rc
+        # Run install script non-interactively (enables shell integration)
+        yes | "$HOME/.fzf/install" --all --no-update-rc 2>/dev/null || true
 
         show_realtime_footer
 
@@ -142,7 +148,7 @@ install_fzf() {
                 log_installed "fzf"
             fi
         else
-            echo -e "  ${RED}✗ Installation failed${NC}"
+            log_failed "fzf"
         fi
     else
         log_skipped "fzf"
@@ -151,7 +157,7 @@ install_fzf() {
 
 # ripgrep - Fast code search
 install_ripgrep() {
-    echo -e "\n${WHITE}[2/6] ripgrep${NC} ${GRAY}(fast code search - rg)${NC}"
+    echo -e "\n${WHITE}[2/14] ripgrep${NC} ${GRAY}(fast code search - rg)${NC}"
 
     local already_installed=false
     if command_exists rg; then
@@ -184,7 +190,7 @@ install_ripgrep() {
                 log_installed "ripgrep"
             fi
         else
-            echo -e "  ${RED}✗ Installation failed${NC}"
+            log_failed "ripgrep"
         fi
     else
         log_skipped "ripgrep"
@@ -193,7 +199,7 @@ install_ripgrep() {
 
 # fd - Modern find
 install_fd() {
-    echo -e "\n${WHITE}[3/6] fd${NC} ${GRAY}(modern find)${NC}"
+    echo -e "\n${WHITE}[3/14] fd${NC} ${GRAY}(modern find)${NC}"
 
     local already_installed=false
     # On Ubuntu, the binary is called 'fdfind' due to name conflict
@@ -241,7 +247,7 @@ install_fd() {
                 log_installed "fd"
             fi
         else
-            echo -e "  ${RED}✗ Installation failed${NC}"
+            log_failed "fd"
         fi
     else
         log_skipped "fd"
@@ -250,7 +256,7 @@ install_fd() {
 
 # bat - cat with syntax highlighting
 install_bat() {
-    echo -e "\n${WHITE}[4/6] bat${NC} ${GRAY}(cat with syntax highlighting)${NC}"
+    echo -e "\n${WHITE}[4/14] bat${NC} ${GRAY}(cat with syntax highlighting)${NC}"
 
     local already_installed=false
     # On Ubuntu, the binary is called 'batcat' due to name conflict
@@ -298,7 +304,7 @@ install_bat() {
                 log_installed "bat"
             fi
         else
-            echo -e "  ${RED}✗ Installation failed${NC}"
+            log_failed "bat"
         fi
     else
         log_skipped "bat"
@@ -307,7 +313,7 @@ install_bat() {
 
 # eza - Modern ls (exa replacement)
 install_eza() {
-    echo -e "\n${WHITE}[5/6] eza${NC} ${GRAY}(modern ls replacement)${NC}"
+    echo -e "\n${WHITE}[5/14] eza${NC} ${GRAY}(modern ls replacement)${NC}"
 
     local already_installed=false
     if command_exists eza; then
@@ -347,7 +353,7 @@ install_eza() {
                 log_installed "eza"
             fi
         else
-            echo -e "  ${RED}✗ Installation failed${NC}"
+            log_failed "eza"
         fi
     else
         log_skipped "eza"
@@ -356,7 +362,7 @@ install_eza() {
 
 # zoxide - Smart cd
 install_zoxide() {
-    echo -e "\n${WHITE}[6/6] zoxide${NC} ${GRAY}(smart cd)${NC}"
+    echo -e "\n${WHITE}[6/14] zoxide${NC} ${GRAY}(smart cd)${NC}"
 
     local already_installed=false
     if command_exists zoxide; then
@@ -404,10 +410,373 @@ install_zoxide() {
                 log_installed "zoxide"
             fi
         else
-            echo -e "  ${RED}✗ Installation failed${NC}"
+            log_failed "zoxide"
         fi
     else
         log_skipped "zoxide"
+    fi
+}
+
+# curl - Transfer data with URLs
+install_curl() {
+    echo -e "\n${WHITE}[7/14] curl${NC} ${GRAY}(transfer data with URLs)${NC}"
+
+    local already_installed=false
+    if command_exists curl; then
+        local version=$(curl --version 2>/dev/null | head -1)
+        echo -e "  ${GREEN}✓ Already installed: $version${NC}"
+        already_installed=true
+
+        if [ "$FORCE_REINSTALL" = false ]; then
+            log_skipped "curl (already installed)"
+            return 0
+        fi
+        echo -e "  ${CYAN}> Reinstall mode enabled${NC}"
+    else
+        echo -e "  ${YELLOW}○ Not installed${NC}"
+    fi
+
+    if prompt_install "curl"; then
+        echo -e "  ${CYAN}> Installing curl...${NC}"
+        show_realtime_header
+        sudo apt-get update
+        sudo apt-get install -y curl
+        show_realtime_footer
+
+        if command_exists curl; then
+            local version=$(curl --version 2>/dev/null | head -1)
+            echo -e "  ${GREEN}✓ Installed: $version${NC}"
+            if [ "$already_installed" = true ]; then
+                log_updated "curl"
+            else
+                log_installed "curl"
+            fi
+        else
+            log_failed "curl"
+        fi
+    else
+        log_skipped "curl"
+    fi
+}
+
+# tealdeer - Fast tldr client
+install_tealdeer() {
+    echo -e "\n${WHITE}[8/14] tealdeer${NC} ${GRAY}(fast tldr client)${NC}"
+
+    local already_installed=false
+    if command_exists tldr; then
+        local version=$(tldr --version 2>/dev/null)
+        echo -e "  ${GREEN}✓ Already installed: $version${NC}"
+        already_installed=true
+
+        if [ "$FORCE_REINSTALL" = false ]; then
+            log_skipped "tealdeer (already installed)"
+            return 0
+        fi
+        echo -e "  ${CYAN}> Reinstall mode enabled${NC}"
+    else
+        echo -e "  ${YELLOW}○ Not installed${NC}"
+    fi
+
+    if prompt_install "tealdeer"; then
+        echo -e "  ${CYAN}> Installing tealdeer...${NC}"
+        show_realtime_header
+        
+        sudo apt-get update
+        sudo apt-get install -y tealdeer
+        
+        # Ensure tldr command is available (tealdeer might install as tldr or tealdeer)
+        if ! command_exists tldr && command_exists tealdeer; then
+             # Create symlink if needed (though apt usually handles this via alternatives)
+             mkdir -p "$HOME/.local/bin"
+             ln -sf "$(which tealdeer)" "$HOME/.local/bin/tldr"
+        fi
+        
+        # Initialize cache
+        if command_exists tldr; then
+             echo "Updating tldr cache..."
+             tldr --update 2>/dev/null || true
+        fi
+        
+        show_realtime_footer
+
+        if command_exists tldr; then
+            local version=$(tldr --version 2>/dev/null)
+            echo -e "  ${GREEN}✓ Installed: $version${NC}"
+            echo -e "  ${CYAN}  Note: Use 'tldr command' for quick help${NC}"
+            if [ "$already_installed" = true ]; then
+                log_updated "tealdeer"
+            else
+                log_installed "tealdeer"
+            fi
+        else
+            log_failed "tealdeer"
+        fi
+    else
+        log_skipped "tealdeer"
+    fi
+}
+
+# cht.sh - Command-line cheat sheets
+install_cht() {
+    echo -e "\n${WHITE}[9/14] cht.sh${NC} ${GRAY}(command-line cheat sheets)${NC}"
+
+    local already_installed=false
+    if command_exists cht.sh || [ -f "$HOME/.local/bin/cht.sh" ]; then
+        echo -e "  ${GREEN}✓ Already installed${NC}"
+        already_installed=true
+
+        if [ "$FORCE_REINSTALL" = false ]; then
+            log_skipped "cht.sh (already installed)"
+            return 0
+        fi
+        echo -e "  ${CYAN}> Reinstall mode enabled${NC}"
+    else
+        echo -e "  ${YELLOW}○ Not installed${NC}"
+    fi
+
+    if prompt_install "cht.sh"; then
+        echo -e "  ${CYAN}> Installing cht.sh...${NC}"
+        show_realtime_header
+
+        # Download and install cht.sh
+        mkdir -p "$HOME/.local/bin"
+        curl -s https://cht.sh/:cht.sh > "$HOME/.local/bin/cht.sh"
+        chmod +x "$HOME/.local/bin/cht.sh"
+
+        show_realtime_footer
+
+        if [ -f "$HOME/.local/bin/cht.sh" ]; then
+            echo -e "  ${GREEN}✓ Installed successfully${NC}"
+            echo -e "  ${CYAN}  Note: Use 'cht.sh command' or 'cht.sh language/query'${NC}"
+            if [ "$already_installed" = true ]; then
+                log_updated "cht.sh"
+            else
+                log_installed "cht.sh"
+            fi
+        else
+            log_failed "cht.sh"
+        fi
+    else
+        log_skipped "cht.sh"
+    fi
+}
+
+# gh - GitHub CLI
+install_gh() {
+    echo -e "\n${WHITE}[10/14] gh${NC} ${GRAY}(GitHub CLI)${NC}"
+
+    local already_installed=false
+    if command_exists gh; then
+        local version=$(gh --version 2>/dev/null | head -1)
+        echo -e "  ${GREEN}✓ Already installed: $version${NC}"
+        already_installed=true
+
+        if [ "$FORCE_REINSTALL" = false ]; then
+            log_skipped "gh (already installed)"
+            return 0
+        fi
+        echo -e "  ${CYAN}> Reinstall mode enabled${NC}"
+    else
+        echo -e "  ${YELLOW}○ Not installed${NC}"
+    fi
+
+    if prompt_install "gh"; then
+        echo -e "  ${CYAN}> Installing GitHub CLI...${NC}"
+        show_realtime_header
+
+        # Install via official apt repository
+        # Get the keyring if it doesn't exist
+        if [ ! -f /usr/share/keyrings/githubcli-archive-keyring.gpg ]; then
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        fi
+        
+        sudo apt-get update
+        sudo apt-get install -y gh
+
+        show_realtime_footer
+
+        if command_exists gh; then
+            local version=$(gh --version 2>/dev/null | head -1)
+            echo -e "  ${GREEN}✓ Installed: $version${NC}"
+            echo -e "  ${CYAN}  Note: Run 'gh auth login' to authenticate${NC}"
+            if [ "$already_installed" = true ]; then
+                log_updated "gh"
+            else
+                log_installed "gh"
+            fi
+        else
+            log_failed "gh"
+        fi
+    else
+        log_skipped "gh"
+    fi
+}
+
+# tree - Directory listing as tree
+install_tree() {
+    echo -e "\n${WHITE}[11/14] tree${NC} ${GRAY}(directory listing as tree)${NC}"
+
+    local already_installed=false
+    if command_exists tree; then
+        local version=$(tree --version 2>/dev/null | head -1)
+        echo -e "  ${GREEN}✓ Already installed: $version${NC}"
+        already_installed=true
+
+        if [ "$FORCE_REINSTALL" = false ]; then
+            log_skipped "tree (already installed)"
+            return 0
+        fi
+        echo -e "  ${CYAN}> Reinstall mode enabled${NC}"
+    else
+        echo -e "  ${YELLOW}○ Not installed${NC}"
+    fi
+
+    if prompt_install "tree"; then
+        echo -e "  ${CYAN}> Installing tree...${NC}"
+        show_realtime_header
+        sudo apt-get update
+        sudo apt-get install -y tree
+        show_realtime_footer
+
+        if command_exists tree; then
+            local version=$(tree --version 2>/dev/null | head -1)
+            echo -e "  ${GREEN}✓ Installed: $version${NC}"
+            if [ "$already_installed" = true ]; then
+                log_updated "tree"
+            else
+                log_installed "tree"
+            fi
+        else
+            log_failed "tree"
+        fi
+    else
+        log_skipped "tree"
+    fi
+}
+
+# neofetch - System info display
+install_neofetch() {
+    echo -e "\n${WHITE}[12/14] neofetch${NC} ${GRAY}(system info display)${NC}"
+
+    local already_installed=false
+    if command_exists neofetch; then
+        echo -e "  ${GREEN}✓ Already installed${NC}"
+        already_installed=true
+
+        if [ "$FORCE_REINSTALL" = false ]; then
+            log_skipped "neofetch (already installed)"
+            return 0
+        fi
+        echo -e "  ${CYAN}> Reinstall mode enabled${NC}"
+    else
+        echo -e "  ${YELLOW}○ Not installed${NC}"
+    fi
+
+    if prompt_install "neofetch"; then
+        echo -e "  ${CYAN}> Installing neofetch...${NC}"
+        show_realtime_header
+        sudo apt-get update
+        sudo apt-get install -y neofetch
+        show_realtime_footer
+
+        if command_exists neofetch; then
+            echo -e "  ${GREEN}✓ Installed successfully${NC}"
+            echo -e "  ${CYAN}  Note: Run 'neofetch' to display system info${NC}"
+            if [ "$already_installed" = true ]; then
+                log_updated "neofetch"
+            else
+                log_installed "neofetch"
+            fi
+        else
+            log_failed "neofetch"
+        fi
+    else
+        log_skipped "neofetch"
+    fi
+}
+
+# cmatrix - Matrix-style terminal animation
+install_cmatrix() {
+    echo -e "\n${WHITE}[13/14] cmatrix${NC} ${GRAY}(Matrix terminal animation)${NC}"
+
+    local already_installed=false
+    if command_exists cmatrix; then
+        echo -e "  ${GREEN}✓ Already installed${NC}"
+        already_installed=true
+
+        if [ "$FORCE_REINSTALL" = false ]; then
+            log_skipped "cmatrix (already installed)"
+            return 0
+        fi
+        echo -e "  ${CYAN}> Reinstall mode enabled${NC}"
+    else
+        echo -e "  ${YELLOW}○ Not installed${NC}"
+    fi
+
+    if prompt_install "cmatrix"; then
+        echo -e "  ${CYAN}> Installing cmatrix...${NC}"
+        show_realtime_header
+        sudo apt-get update
+        sudo apt-get install -y cmatrix
+        show_realtime_footer
+
+        if command_exists cmatrix; then
+            echo -e "  ${GREEN}✓ Installed successfully${NC}"
+            echo -e "  ${CYAN}  Note: Run 'cmatrix' for the Matrix effect (q to quit)${NC}"
+            if [ "$already_installed" = true ]; then
+                log_updated "cmatrix"
+            else
+                log_installed "cmatrix"
+            fi
+        else
+            log_failed "cmatrix"
+        fi
+    else
+        log_skipped "cmatrix"
+    fi
+}
+
+# chemtool - 2D chemical structure editor
+install_chemtool() {
+    echo -e "\n${WHITE}[14/14] chemtool${NC} ${GRAY}(2D chemical structure editor)${NC}"
+
+    local already_installed=false
+    if command_exists chemtool; then
+        echo -e "  ${GREEN}✓ Already installed${NC}"
+        already_installed=true
+
+        if [ "$FORCE_REINSTALL" = false ]; then
+            log_skipped "chemtool (already installed)"
+            return 0
+        fi
+        echo -e "  ${CYAN}> Reinstall mode enabled${NC}"
+    else
+        echo -e "  ${YELLOW}○ Not installed${NC}"
+    fi
+
+    if prompt_install "chemtool"; then
+        echo -e "  ${CYAN}> Installing chemtool...${NC}"
+        show_realtime_header
+        sudo apt-get update
+        sudo apt-get install -y chemtool
+        show_realtime_footer
+
+        if command_exists chemtool; then
+            echo -e "  ${GREEN}✓ Installed successfully${NC}"
+            echo -e "  ${CYAN}  Note: Run 'chemtool' to draw chemical structures${NC}"
+            if [ "$already_installed" = true ]; then
+                log_updated "chemtool"
+            else
+                log_installed "chemtool"
+            fi
+        else
+            log_failed "chemtool"
+        fi
+    else
+        log_skipped "chemtool"
     fi
 }
 
@@ -482,20 +851,36 @@ main() {
     fi
 
     echo -e "\n${CYAN}Tools to install:${NC}"
-    echo -e "  ${WHITE}fzf${NC}      - Fuzzy finder (universal)"
-    echo -e "  ${WHITE}ripgrep${NC}  - Fast code search (rg)"
-    echo -e "  ${WHITE}fd${NC}       - Modern find"
-    echo -e "  ${WHITE}bat${NC}      - cat with syntax highlight"
-    echo -e "  ${WHITE}eza${NC}      - Modern ls (exa replacement)"
-    echo -e "  ${WHITE}zoxide${NC}   - Smart cd"
+    echo -e "  ${WHITE}fzf${NC}       - Fuzzy finder (universal)"
+    echo -e "  ${WHITE}ripgrep${NC}   - Fast code search (rg)"
+    echo -e "  ${WHITE}fd${NC}        - Modern find"
+    echo -e "  ${WHITE}bat${NC}       - cat with syntax highlight"
+    echo -e "  ${WHITE}eza${NC}       - Modern ls (exa replacement)"
+    echo -e "  ${WHITE}zoxide${NC}    - Smart cd"
+    echo -e "  ${WHITE}curl${NC}      - Transfer data with URLs"
+    echo -e "  ${WHITE}tealdeer${NC}  - Fast tldr client"
+    echo -e "  ${WHITE}cht.sh${NC}    - Command-line cheat sheets"
+    echo -e "  ${WHITE}gh${NC}        - GitHub CLI"
+    echo -e "  ${WHITE}tree${NC}      - Directory listing as tree"
+    echo -e "  ${WHITE}neofetch${NC}  - System info display"
+    echo -e "  ${WHITE}cmatrix${NC}   - Matrix terminal animation"
+    echo -e "  ${WHITE}chemtool${NC}  - 2D chemical structure editor"
 
-    # Install each tool
-    install_fzf
-    install_ripgrep
-    install_fd
-    install_bat
-    install_eza
-    install_zoxide
+    # Install each tool (continue on errors)
+    install_fzf || true
+    install_ripgrep || true
+    install_fd || true
+    install_bat || true
+    install_eza || true
+    install_zoxide || true
+    install_curl || true
+    install_tealdeer || true
+    install_cht || true
+    install_gh || true
+    install_tree || true
+    install_neofetch || true
+    install_cmatrix || true
+    install_chemtool || true
 
     # Setup shell integration
     if [ ${#INSTALLED_TOOLS[@]} -gt 0 ] || [ ${#UPDATED_TOOLS[@]} -gt 0 ]; then
@@ -529,16 +914,32 @@ main() {
         done
     fi
 
+    if [ ${#FAILED_TOOLS[@]} -gt 0 ]; then
+        echo -e "\n${RED}Failed:${NC}"
+        for tool in "${FAILED_TOOLS[@]}"; do
+            echo -e "  ${RED}✗${NC} $tool"
+        done
+        echo -e "\n${YELLOW}Some tools failed to install. You can retry with: ./cli-tools.sh --reinstall${NC}"
+    fi
+
     echo ""
     echo -e "${YELLOW}Restart your terminal for all changes to take effect.${NC}"
     echo ""
     echo -e "${CYAN}Quick reference:${NC}"
-    echo -e "  ${WHITE}fzf${NC}      Ctrl+R (history), Ctrl+T (files)"
-    echo -e "  ${WHITE}rg${NC}       rg 'pattern' (fast grep)"
-    echo -e "  ${WHITE}fd${NC}       fd 'pattern' (fast find)"
-    echo -e "  ${WHITE}bat${NC}      bat file.txt (syntax highlight)"
-    echo -e "  ${WHITE}eza${NC}      ll, la, lt (modern ls)"
-    echo -e "  ${WHITE}z${NC}        z dirname (smart cd)"
+    echo -e "  ${WHITE}fzf${NC}       Ctrl+R (history), Ctrl+T (files)"
+    echo -e "  ${WHITE}rg${NC}        rg 'pattern' (fast grep)"
+    echo -e "  ${WHITE}fd${NC}        fd 'pattern' (fast find)"
+    echo -e "  ${WHITE}bat${NC}       bat file.txt (syntax highlight)"
+    echo -e "  ${WHITE}eza${NC}       ll, la, lt (modern ls)"
+    echo -e "  ${WHITE}z${NC}         z dirname (smart cd)"
+    echo -e "  ${WHITE}curl${NC}      curl url (transfer data)"
+    echo -e "  ${WHITE}tealdeer${NC}  tldr command (fast help)"
+    echo -e "  ${WHITE}cht.sh${NC}    cht.sh language/query"
+    echo -e "  ${WHITE}gh${NC}        gh repo create (github cli)"
+    echo -e "  ${WHITE}tree${NC}      tree (directory structure)"
+    echo -e "  ${WHITE}neofetch${NC}  neofetch (system info)"
+    echo -e "  ${WHITE}cmatrix${NC}   cmatrix (Matrix effect, q to quit)"
+    echo -e "  ${WHITE}chemtool${NC}  chemtool (draw chemicals)"
     echo ""
 }
 
