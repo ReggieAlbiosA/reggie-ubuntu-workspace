@@ -3,7 +3,7 @@
 # Sets up workspace launcher to run at login via XDG autostart
 # Can be run standalone or called from setup.sh
 
-set -e
+# Note: set -e removed to allow graceful error handling - script continues on failures
 
 # Colors
 RED='\033[0;31m'
@@ -52,18 +52,26 @@ else
 
     if [ -f "$LOCAL_LAUNCHER" ]; then
         # Local: copy the script
-        cp "$LOCAL_LAUNCHER" "$SCRIPT_DEST"
-        echo -e "  ${GREEN}+ Copied from local: $LOCAL_LAUNCHER${NC}"
+        if cp "$LOCAL_LAUNCHER" "$SCRIPT_DEST"; then
+            echo -e "  ${GREEN}+ Copied from local: $LOCAL_LAUNCHER${NC}"
+        else
+            echo -e "  ${RED}! Failed to copy launcher script${NC}"
+        fi
     else
         # Remote: download from GitHub
         LAUNCHER_URL="$GITHUB_RAW_URL/$SCRIPT_NAME"
         echo -e "  ${CYAN}> Downloading $SCRIPT_NAME...${NC}"
-        curl -fsSL "$LAUNCHER_URL" -o "$SCRIPT_DEST"
-        echo -e "  ${GREEN}+ Downloaded from GitHub${NC}"
+        if curl -fsSL "$LAUNCHER_URL" -o "$SCRIPT_DEST"; then
+            echo -e "  ${GREEN}+ Downloaded from GitHub${NC}"
+        else
+            echo -e "  ${RED}! Failed to download launcher (network error or 404)${NC}"
+        fi
     fi
 
-    chmod +x "$SCRIPT_DEST"
-    echo -e "  ${GREEN}+ Installed to: $SCRIPT_DEST${NC}"
+    if [ -f "$SCRIPT_DEST" ]; then
+        chmod +x "$SCRIPT_DEST"
+        echo -e "  ${GREEN}+ Installed to: $SCRIPT_DEST${NC}"
+    fi
 fi
 
 # --- Step 2: Setup autostart directory ---
@@ -83,7 +91,7 @@ echo -e "\n${NC}[3/3] Creating autostart entry${NC}"
 if [ -f "$DESKTOP_FILE" ]; then
     echo -e "  ${GREEN}✓ Autostart entry already exists${NC}"
 else
-    cat > "$DESKTOP_FILE" << EOF
+    if cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Type=Application
 Name=Reggie Workspace
@@ -93,7 +101,11 @@ Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
 EOF
-    echo -e "  ${GREEN}+ Autostart entry created${NC}"
+    then
+        echo -e "  ${GREEN}+ Autostart entry created${NC}"
+    else
+        echo -e "  ${RED}! Failed to create autostart entry${NC}"
+    fi
 fi
 
 # --- Summary ---

@@ -2,7 +2,24 @@
 # git-identity-setup.sh
 # Interactive Git Identity Manager - prompts for author on each commit
 
-set -e
+# Note: set -e removed to allow graceful error handling - script continues on failures
+
+#######################################
+# Argument Parsing
+#######################################
+AUTO_YES=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -y|--yes)
+            AUTO_YES=true
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 # Colors
 RED='\033[0;31m'
@@ -61,6 +78,12 @@ check_existing_identities() {
         done < "$IDENTITIES_FILE"
         echo ""
         
+        # Auto-accept: keep existing identities when -y flag is set
+        if [ "$AUTO_YES" = true ]; then
+            echo -e "  ${CYAN}> Auto-accepting: keeping existing identities${NC}"
+            return 1  # Skip collection
+        fi
+
         while true; do
             read -p "  > Keep existing identities? (y = keep, n = reconfigure): " -r REPLY < /dev/tty
             case "${REPLY,,}" in
@@ -425,10 +448,12 @@ main() {
     echo -e "${MAGENTA}==========================================${NC}"
     echo ""
 
+    local setup_failed=false
+
     # Step 1: Check Git
     if ! check_git; then
-        echo -e "\n${RED}=== Setup Failed ===${NC}"
-        exit 1
+        echo -e "\n${RED}! Git not installed - cannot configure Git Identity Manager${NC}"
+        return 1
     fi
 
     # Step 2: Check existing identities
@@ -440,26 +465,31 @@ main() {
     # Step 3: Collect identities (if needed)
     if [ "$skip_collection" = false ]; then
         if ! collect_identities; then
-            echo -e "\n${RED}=== Setup Failed ===${NC}"
-            echo -e "${YELLOW}At least one identity is required.${NC}"
-            exit 1
+            echo -e "\n${YELLOW}! No identities configured - skipping hook setup${NC}"
+            return 1
         fi
     fi
 
     # Step 4: Create hook
     if ! create_hook; then
-        echo -e "\n${RED}=== Setup Failed ===${NC}"
-        exit 1
+        echo -e "\n${RED}! Failed to create pre-commit hook${NC}"
+        setup_failed=true
     fi
 
     # Step 5: Configure Git
     if ! configure_git_hooks; then
-        echo -e "\n${RED}=== Setup Failed ===${NC}"
-        exit 1
+        echo -e "\n${RED}! Failed to configure Git global hooks${NC}"
+        setup_failed=true
     fi
 
-    # Show success
-    show_success
+    # Show result
+    if [ "$setup_failed" = true ]; then
+        echo -e "\n${YELLOW}=== Setup completed with errors ===${NC}"
+        return 1
+    else
+        show_success
+        return 0
+    fi
 }
 
 # Run the setup

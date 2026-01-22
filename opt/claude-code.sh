@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # claude-code-setup.sh
 # Automated Claude Code installation with Node.js/npm dependency checking
+#
+# Flags:
+#   -y, --yes    Auto-accept all prompts
 
-set -Eeuo pipefail
+# Note: using -uo pipefail instead of -Eeuo pipefail to allow graceful error handling
+set -uo pipefail
 
 #######################################
 # Colors
@@ -16,9 +20,44 @@ GRAY='\033[0;90m'
 NC='\033[0m'
 
 #######################################
+# Argument Parsing
+#######################################
+AUTO_YES=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -y|--yes)
+            AUTO_YES=true
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+#######################################
 # Globals
 #######################################
 EXPECTED_MCPS=("better-auth" "sequential-thinking" "github")
+
+# Track installation status
+INSTALLED_COMPONENTS=()
+SKIPPED_COMPONENTS=()
+FAILED_COMPONENTS=()
+
+log_installed() {
+    INSTALLED_COMPONENTS+=("$1")
+}
+
+log_skipped() {
+    SKIPPED_COMPONENTS+=("$1")
+}
+
+log_failed() {
+    FAILED_COMPONENTS+=("$1")
+    echo -e "  ${RED}✗ Failed: $1${NC}"
+}
 
 if [[ $EUID -eq 0 ]]; then
     MCP_SCOPE="system"
@@ -45,6 +84,10 @@ command_exists() {
 
 prompt_yes_no() {
     local prompt="$1"
+    if [ "$AUTO_YES" = true ]; then
+        echo -e "  ${CYAN}> Auto-accepting: $prompt${NC}"
+        return 0
+    fi
     while true; do
         read -rp "  > $prompt (y/n): " reply
         case "${reply,,}" in
@@ -63,27 +106,41 @@ install_nodejs() {
 
     if command_exists node; then
         echo -e "  ${GREEN}+ Found $(node --version)${NC}"
-        return
+        log_installed "Node.js $(node --version)"
+        return 0
     fi
 
     echo -e "  ${YELLOW}! Node.js not found${NC}"
     prompt_yes_no "Install Node.js (required)?" || {
-        echo -e "${RED}Node.js required. Aborting.${NC}"
-        exit 1
+        echo -e "  ${YELLOW}! Node.js skipped by user. Some features may not work.${NC}"
+        log_skipped "Node.js (user declined)"
+        return 1
     }
 
     echo -e "  ${CYAN}> Installing Node.js LTS...${NC}"
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | as_root bash -
-    as_root apt-get install -y nodejs
+    if curl -fsSL https://deb.nodesource.com/setup_lts.x | as_root bash - && \
+       as_root apt-get install -y nodejs; then
+        if command_exists node; then
+            echo -e "  ${GREEN}✓ Node.js installed: $(node --version)${NC}"
+            log_installed "Node.js $(node --version)"
+            return 0
+        fi
+    fi
+
+    log_failed "Node.js (installation error)"
+    return 1
 }
 
 check_npm() {
     echo -e "\n${NC}[2/4] Checking npm...${NC}"
-    command_exists npm || {
-        echo -e "${RED}npm not found after Node.js install${NC}"
-        exit 1
-    }
-    echo -e "  ${GREEN}+ npm v$(npm --version)${NC}"
+    if command_exists npm; then
+        echo -e "  ${GREEN}+ npm v$(npm --version)${NC}"
+        log_installed "npm v$(npm --version)"
+        return 0
+    else
+        log_failed "npm (not found - Node.js may have failed)"
+        return 1
+    fi
 }
 
 #######################################
@@ -94,14 +151,27 @@ install_claude_code() {
 
     if command_exists claude; then
         echo -e "  ${GREEN}+ Found $(claude --version 2>/dev/null)${NC}"
-        return
+        log_installed "Claude Code"
+        return 0
     fi
 
     echo -e "  ${YELLOW}! Claude Code not installed${NC}"
-    prompt_yes_no "Install Claude Code?" || return
+    prompt_yes_no "Install Claude Code?" || {
+        log_skipped "Claude Code (user declined)"
+        return 0
+    }
 
     echo -e "  ${CYAN}> Installing Claude Code...${NC}"
-    as_root npm install -g @anthropic-ai/claude-code
+    if as_root npm install -g @anthropic-ai/claude-code; then
+        if command_exists claude; then
+            echo -e "  ${GREEN}✓ Claude Code installed${NC}"
+            log_installed "Claude Code"
+            return 0
+        fi
+    fi
+
+    log_failed "Claude Code (npm install error)"
+    return 1
 }
 
 #######################################
@@ -189,19 +259,79 @@ add_mcp_servers() {
 #######################################
 # Main
 #######################################
+show_summary() {
+    echo -e "\n${MAGENTA}==========================================${NC}"
+    echo -e "${MAGENTA}   Installation Summary${NC}"
+    echo -e "${MAGENTA}==========================================${NC}"
+
+    if [ ${#INSTALLED_COMPONENTS[@]} -gt 0 ]; then
+        echo -e "\n${GREEN}Installed/Found:${NC}"
+        for item in "${INSTALLED_COMPONENTS[@]}"; do
+            echo -e "  ${GREEN}✓${NC} $item"
+        done
+    fi
+
+    if [ ${#SKIPPED_COMPONENTS[@]} -gt 0 ]; then
+        echo -e "\n${GRAY}Skipped:${NC}"
+        for item in "${SKIPPED_COMPONENTS[@]}"; do
+            echo -e "  ${GRAY}○${NC} $item"
+        done
+    fi
+
+    if [ ${#FAILED_COMPONENTS[@]} -gt 0 ]; then
+        echo -e "\n${RED}Failed:${NC}"
+        for item in "${FAILED_COMPONENTS[@]}"; do
+            echo -e "  ${RED}✗${NC} $item"
+        done
+        echo -e "\n${YELLOW}Some components failed. You can retry by running this script again.${NC}"
+    fi
+}
+
 main() {
     echo -e "${MAGENTA}==========================================${NC}"
     echo -e "${MAGENTA}   Claude Code Installation Script${NC}"
     echo -e "${MAGENTA}==========================================${NC}"
     echo -e "${CYAN}Scope: ${MCP_SCOPE}${NC}"
 
-    install_nodejs
-    check_npm
-    install_claude_code
-    add_mcp_servers
+    local npm_available=false
 
-    echo -e "\n${GREEN}Setup complete!${NC}"
-    echo -e "${CYAN}Run 'claude' to start.${NC}"
+    # Step 1: Node.js (required for npm)
+    if install_nodejs; then
+        # Step 2: Check npm (required for Claude Code)
+        if check_npm; then
+            npm_available=true
+        fi
+    else
+        echo -e "  ${YELLOW}! Skipping npm check (Node.js not available)${NC}"
+        log_skipped "npm check (Node.js required)"
+    fi
+
+    # Step 3: Claude Code (requires npm)
+    if [ "$npm_available" = true ]; then
+        install_claude_code || true
+    else
+        echo -e "\n${NC}[3/4] Checking Claude Code...${NC}"
+        echo -e "  ${YELLOW}! Skipping Claude Code (npm not available)${NC}"
+        log_skipped "Claude Code (npm required)"
+    fi
+
+    # Step 4: MCP Servers (requires Claude Code)
+    if command_exists claude; then
+        add_mcp_servers || true
+    else
+        echo -e "\n${NC}[4/4] Configuring MCP Servers...${NC}"
+        echo -e "  ${YELLOW}! Skipping MCP servers (Claude Code not available)${NC}"
+        log_skipped "MCP Servers (Claude Code required)"
+    fi
+
+    show_summary
+
+    if command_exists claude; then
+        echo -e "\n${GREEN}Setup complete!${NC}"
+        echo -e "${CYAN}Run 'claude' to start.${NC}"
+    else
+        echo -e "\n${YELLOW}Setup finished with issues. Claude Code is not available.${NC}"
+    fi
 }
 
 main
