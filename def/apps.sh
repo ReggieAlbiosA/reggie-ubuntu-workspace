@@ -25,6 +25,7 @@ SKIP_CURSOR=false
 SKIP_ANTIGRAVITY=false
 SKIP_OBSIDIAN=false
 SKIP_CHROME=false
+SKIP_DOCKER_DESKTOP=false
 
 # ===============================
 # Parse arguments
@@ -38,9 +39,10 @@ while [[ $# -gt 0 ]]; do
         --skip-antigravity) SKIP_ANTIGRAVITY=true ;;
         --skip-obsidian) SKIP_OBSIDIAN=true ;;
         --skip-chrome) SKIP_CHROME=true ;;
+        --skip-docker-desktop) SKIP_DOCKER_DESKTOP=true ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
-            echo "Usage: apps.sh [-y|--yes] [--reinstall] [--skip-vscode] [--skip-cursor] [--skip-antigravity] [--skip-obsidian] [--skip-chrome]"
+            echo "Usage: apps.sh [-y|--yes] [--reinstall] [--skip-vscode] [--skip-cursor] [--skip-antigravity] [--skip-obsidian] [--skip-chrome] [--skip-docker-desktop]"
             exit 1
             ;;
     esac
@@ -200,11 +202,122 @@ install_antigravity_repo() {
 }
 
 # ===============================
+# Docker Desktop Prerequisites
+# ===============================
+check_docker_desktop_prerequisites() {
+    local errors=0
+
+    echo -e "  ${CYAN}Checking prerequisites...${NC}"
+
+    # 1. Check 64-bit kernel
+    if [ "$(uname -m)" != "x86_64" ]; then
+        echo -e "  ${RED}✗ Requires 64-bit (x86_64) system${NC}"
+        ((errors++))
+    else
+        echo -e "  ${GREEN}✓ 64-bit system${NC}"
+    fi
+
+    # 2. Check systemd
+    if ! pidof systemd >/dev/null 2>&1; then
+        echo -e "  ${RED}✗ Requires systemd init system${NC}"
+        ((errors++))
+    else
+        echo -e "  ${GREEN}✓ systemd init system${NC}"
+    fi
+
+    # 3. Check RAM (at least 4GB)
+    local ram_kb
+    ram_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    local ram_gb=$((ram_kb / 1024 / 1024))
+    if [ "$ram_gb" -lt 4 ]; then
+        echo -e "  ${RED}✗ Requires at least 4GB RAM (found: ${ram_gb}GB)${NC}"
+        ((errors++))
+    else
+        echo -e "  ${GREEN}✓ RAM: ${ram_gb}GB${NC}"
+    fi
+
+    # 4. Check Ubuntu version (22.04, 24.04, or latest)
+    if [ -f /etc/os-release ]; then
+        # shellcheck source=/dev/null
+        . /etc/os-release
+        case "$VERSION_ID" in
+            22.04|24.04|24.10|25.04)
+                echo -e "  ${GREEN}✓ Ubuntu $VERSION_ID${NC}"
+                ;;
+            *)
+                echo -e "  ${YELLOW}! Ubuntu $VERSION_ID may not be officially supported${NC}"
+                ;;
+        esac
+    fi
+
+    # 5. Check CPU virtualization support
+    if ! grep -qE '(vmx|svm)' /proc/cpuinfo; then
+        echo -e "  ${RED}✗ CPU virtualization not enabled (VT-x/AMD-V)${NC}"
+        ((errors++))
+    else
+        echo -e "  ${GREEN}✓ CPU virtualization supported${NC}"
+    fi
+
+    # 6. Check desktop environment, install gnome-terminal if needed
+    local desktop="${XDG_CURRENT_DESKTOP:-unknown}"
+    echo -e "  ${CYAN}  Desktop: $desktop${NC}"
+    if [[ ! "$desktop" =~ ^(GNOME|KDE|MATE) ]]; then
+        if ! command_exists gnome-terminal; then
+            echo -e "  ${YELLOW}! Installing gnome-terminal for non-GNOME desktop...${NC}"
+            sudo apt install -y gnome-terminal
+        fi
+    fi
+
+    return $errors
+}
+
+# ===============================
+# Docker Credentials Setup
+# ===============================
+setup_docker_credentials() {
+    echo -e "\n  ${CYAN}Setting up Docker Hub credentials...${NC}"
+
+    # Check if pass is installed
+    if ! command_exists pass; then
+        echo -e "  ${CYAN}> Installing pass...${NC}"
+        sudo apt install -y pass
+    fi
+
+    local gpg_id=""
+
+    # Check if GPG key already exists
+    if gpg --list-keys 2>/dev/null | grep -q "^pub"; then
+        echo -e "  ${GREEN}✓ GPG key already exists${NC}"
+        gpg_id=$(gpg --list-keys --keyid-format LONG 2>/dev/null | grep "^pub" | head -1 | awk '{print $2}' | cut -d'/' -f2)
+    else
+        echo -e "  ${CYAN}> Generating GPG key for Docker credentials...${NC}"
+        echo -e "  ${YELLOW}  You will be prompted for your name, email, and passphrase${NC}"
+
+        # Generate GPG key (requires user interaction)
+        gpg --generate-key
+
+        # Get the GPG key ID
+        gpg_id=$(gpg --list-keys --keyid-format LONG 2>/dev/null | grep "^pub" | head -1 | awk '{print $2}' | cut -d'/' -f2)
+    fi
+
+    # Initialize pass if not already done
+    if [ ! -d "$HOME/.password-store" ]; then
+        echo -e "  ${CYAN}> Initializing pass with GPG key...${NC}"
+        pass init "$gpg_id"
+    else
+        echo -e "  ${GREEN}✓ pass already initialized${NC}"
+    fi
+
+    echo -e "  ${GREEN}✓ Docker credentials setup complete${NC}"
+    echo -e "  ${CYAN}  You can now sign in to Docker Desktop${NC}"
+}
+
+# ===============================
 # Installers
 # ===============================
 
 install_cursor() {
-    echo -e "\n${WHITE}[1/4] Cursor${NC}"
+    echo -e "\n${WHITE}[1/5] Cursor${NC}"
 
     if [ "$SKIP_CURSOR" = true ]; then
         echo -e "  ${GRAY}○ Skipped by flag${NC}"
@@ -235,7 +348,7 @@ install_cursor() {
 }
 
 install_antigravity() {
-    echo -e "\n${WHITE}[2/4] Antigravity${NC}"
+    echo -e "\n${WHITE}[2/5] Antigravity${NC}"
 
     if [ "$SKIP_ANTIGRAVITY" = true ]; then
         echo -e "  ${GRAY}○ Skipped by flag${NC}"
@@ -273,7 +386,7 @@ install_antigravity() {
 }
 
 install_obsidian() {
-    echo -e "\n${WHITE}[3/4] Obsidian${NC}"
+    echo -e "\n${WHITE}[3/5] Obsidian${NC}"
 
     if [ "$SKIP_OBSIDIAN" = true ]; then
         echo -e "  ${GRAY}○ Skipped by flag${NC}"
@@ -304,7 +417,7 @@ install_obsidian() {
 }
 
 install_chrome() {
-    echo -e "\n${WHITE}[4/4] Google Chrome${NC}"
+    echo -e "\n${WHITE}[4/5] Google Chrome${NC}"
 
     if [ "$SKIP_CHROME" = true ]; then
         echo -e "  ${GRAY}○ Skipped by flag${NC}"
@@ -334,6 +447,58 @@ install_chrome() {
     fi
 }
 
+install_docker_desktop() {
+    echo -e "\n${WHITE}[5/5] Docker Desktop${NC}"
+
+    if [ "$SKIP_DOCKER_DESKTOP" = true ]; then
+        echo -e "  ${GRAY}○ Skipped by flag${NC}"
+        log_skipped "Docker Desktop"
+        return 0
+    fi
+
+    # Check if already installed
+    if command_exists docker && [ "$FORCE_REINSTALL" = false ]; then
+        local version
+        version=$(docker --version 2>/dev/null)
+        echo -e "  ${GREEN}✓ Already installed: $version${NC}"
+        log_skipped "Docker Desktop"
+        return 0
+    fi
+
+    echo -e "  ${YELLOW}○ Not installed${NC}"
+
+    # Check prerequisites
+    if ! check_docker_desktop_prerequisites; then
+        echo -e "  ${RED}✗ Prerequisites not met. Cannot install Docker Desktop.${NC}"
+        log_failed "Docker Desktop (prerequisites)"
+        return 1
+    fi
+
+    if prompt_install "Docker Desktop"; then
+        show_realtime_header
+
+        local docker_url="https://desktop.docker.com/linux/main/amd64/docker-desktop-amd64.deb"
+        if install_deb "docker-desktop" "$docker_url"; then
+            show_realtime_footer
+            log_installed "Docker Desktop"
+
+            # Ask about credentials setup
+            echo -e "\n  ${CYAN}Docker Desktop installed successfully!${NC}"
+            if prompt_install "Docker Hub credentials setup (recommended for pushing images)"; then
+                setup_docker_credentials
+            else
+                echo -e "  ${GRAY}○ Skipped credentials setup${NC}"
+                echo -e "  ${CYAN}  Run later: gpg --generate-key && pass init <GPG_ID>${NC}"
+            fi
+        else
+            show_realtime_footer
+            log_failed "Docker Desktop"
+        fi
+    else
+        log_skipped "Docker Desktop"
+    fi
+}
+
 # ===============================
 # Main
 # ===============================
@@ -346,6 +511,7 @@ main() {
     install_antigravity || true
     install_obsidian || true
     install_chrome || true
+    install_docker_desktop || true
 
     echo -e "\n${GREEN}========================================${NC}"
     echo -e "${WHITE}   Installation Summary${NC}"
