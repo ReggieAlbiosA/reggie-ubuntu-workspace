@@ -88,10 +88,6 @@ log_installed() {
     echo -e "  ${GREEN}✓ Added to installed: $1${NC}"
 }
 
-log_skipped() {
-    SKIPPED_APPS+=("$1")
-    echo -e "  ${GRAY}○ Skipped: $1${NC}"
-}
 
 log_failed() {
     FAILED_APPS+=("$1")
@@ -199,36 +195,6 @@ install_antigravity_repo() {
 # ===============================
 # Installers
 # ===============================
-install_vscode() {
-    echo -e "\n${WHITE}[1/3] VS Code${NC}"
-
-    if [ "$SKIP_VSCODE" = true ]; then
-        echo -e "  ${GRAY}○ Skipped by flag${NC}"
-        log_skipped "VS Code"
-        return 0
-    fi
-
-    if command_exists code && [ "$FORCE_REINSTALL" = false ]; then
-        echo -e "  ${GREEN}✓ Already installed: v$(code --version | head -1)${NC}"
-        log_skipped "VS Code v$(code --version | head -1)"
-        return 0
-    fi
-
-    echo -e "  ${YELLOW}○ Not installed${NC}"
-
-    if prompt_install "VS Code"; then
-        show_realtime_header
-        if sudo snap install code --classic; then
-            show_realtime_footer
-            log_installed "VS Code"
-        else
-            show_realtime_footer
-            log_failed "VS Code"
-        fi
-    else
-        log_skipped "VS Code"
-    fi
-}
 
 install_cursor() {
     echo -e "\n${WHITE}[2/3] Cursor${NC}"
@@ -304,10 +270,9 @@ install_antigravity() {
 # ===============================
 main() {
     echo -e "${CYAN}========================================${NC}"
-    echo -e "${WHITE}   Development Apps Installation${NC}"
+    echo -e "${WHITE}    Apps Installation${NC}"
     echo -e "${CYAN}========================================${NC}"
 
-    install_vscode || true
     install_cursor || true
     install_antigravity || true
 
@@ -320,18 +285,12 @@ main() {
         printf "  ${GREEN}✓${NC} %s\n" "${INSTALLED_APPS[@]}"
     fi
 
-    if [ "${#SKIPPED_APPS[@]}" -gt 0 ]; then
-        echo -e "\n${GRAY}Skipped:${NC}"
-        printf "  ${GRAY}○${NC} %s\n" "${SKIPPED_APPS[@]}"
-    fi
 
     if [ "${#FAILED_APPS[@]}" -gt 0 ]; then
         echo -e "\n${RED}Failed:${NC}"
         printf "  ${RED}✗${NC} %s\n" "${FAILED_APPS[@]}"
         echo -e "\n${YELLOW}Retry with:${NC} ./apps.sh --reinstall"
     fi
-
-    echo -e "\n${YELLOW}Note:${NC} Restart your terminal to ensure PATH is updated"
 }
 
 main
