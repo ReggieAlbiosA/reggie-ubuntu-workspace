@@ -23,6 +23,8 @@ FORCE_REINSTALL=false
 SKIP_VSCODE=false
 SKIP_CURSOR=false
 SKIP_ANTIGRAVITY=false
+SKIP_OBSIDIAN=false
+SKIP_CHROME=false
 
 # ===============================
 # Parse arguments
@@ -34,9 +36,11 @@ while [[ $# -gt 0 ]]; do
         --skip-vscode) SKIP_VSCODE=true ;;
         --skip-cursor) SKIP_CURSOR=true ;;
         --skip-antigravity) SKIP_ANTIGRAVITY=true ;;
+        --skip-obsidian) SKIP_OBSIDIAN=true ;;
+        --skip-chrome) SKIP_CHROME=true ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
-            echo "Usage: apps.sh [-y|--yes] [--reinstall] [--skip-vscode] [--skip-cursor] [--skip-antigravity]"
+            echo "Usage: apps.sh [-y|--yes] [--reinstall] [--skip-vscode] [--skip-cursor] [--skip-antigravity] [--skip-obsidian] [--skip-chrome]"
             exit 1
             ;;
     esac
@@ -88,6 +92,9 @@ log_installed() {
     echo -e "  ${GREEN}✓ Added to installed: $1${NC}"
 }
 
+log_skipped() {
+    SKIPPED_APPS+=("$1")
+}
 
 log_failed() {
     FAILED_APPS+=("$1")
@@ -197,7 +204,7 @@ install_antigravity_repo() {
 # ===============================
 
 install_cursor() {
-    echo -e "\n${WHITE}[2/3] Cursor${NC}"
+    echo -e "\n${WHITE}[1/4] Cursor${NC}"
 
     if [ "$SKIP_CURSOR" = true ]; then
         echo -e "  ${GRAY}○ Skipped by flag${NC}"
@@ -228,7 +235,7 @@ install_cursor() {
 }
 
 install_antigravity() {
-    echo -e "\n${WHITE}[3/3] Antigravity${NC}"
+    echo -e "\n${WHITE}[2/4] Antigravity${NC}"
 
     if [ "$SKIP_ANTIGRAVITY" = true ]; then
         echo -e "  ${GRAY}○ Skipped by flag${NC}"
@@ -265,6 +272,68 @@ install_antigravity() {
     fi
 }
 
+install_obsidian() {
+    echo -e "\n${WHITE}[3/4] Obsidian${NC}"
+
+    if [ "$SKIP_OBSIDIAN" = true ]; then
+        echo -e "  ${GRAY}○ Skipped by flag${NC}"
+        log_skipped "Obsidian"
+        return 0
+    fi
+
+    if command_exists obsidian && [ "$FORCE_REINSTALL" = false ]; then
+        echo -e "  ${GREEN}✓ Already installed${NC}"
+        log_skipped "Obsidian"
+        return 0
+    fi
+
+    echo -e "  ${YELLOW}○ Not installed${NC}"
+
+    if prompt_install "Obsidian"; then
+        show_realtime_header
+        if install_deb "obsidian" "https://github.com/obsidianmd/obsidian-releases/releases/download/v1.11.5/obsidian_1.11.5_amd64.deb"; then
+            show_realtime_footer
+            log_installed "Obsidian"
+        else
+            show_realtime_footer
+            log_failed "Obsidian"
+        fi
+    else
+        log_skipped "Obsidian"
+    fi
+}
+
+install_chrome() {
+    echo -e "\n${WHITE}[4/4] Google Chrome${NC}"
+
+    if [ "$SKIP_CHROME" = true ]; then
+        echo -e "  ${GRAY}○ Skipped by flag${NC}"
+        log_skipped "Google Chrome"
+        return 0
+    fi
+
+    if command_exists google-chrome && [ "$FORCE_REINSTALL" = false ]; then
+        echo -e "  ${GREEN}✓ Already installed${NC}"
+        log_skipped "Google Chrome"
+        return 0
+    fi
+
+    echo -e "  ${YELLOW}○ Not installed${NC}"
+
+    if prompt_install "Google Chrome"; then
+        show_realtime_header
+        if install_deb "google-chrome" "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"; then
+            show_realtime_footer
+            log_installed "Google Chrome"
+        else
+            show_realtime_footer
+            log_failed "Google Chrome"
+        fi
+    else
+        log_skipped "Google Chrome"
+    fi
+}
+
 # ===============================
 # Main
 # ===============================
@@ -275,6 +344,8 @@ main() {
 
     install_cursor || true
     install_antigravity || true
+    install_obsidian || true
+    install_chrome || true
 
     echo -e "\n${GREEN}========================================${NC}"
     echo -e "${WHITE}   Installation Summary${NC}"
@@ -285,6 +356,10 @@ main() {
         printf "  ${GREEN}✓${NC} %s\n" "${INSTALLED_APPS[@]}"
     fi
 
+    if [ "${#SKIPPED_APPS[@]}" -gt 0 ]; then
+        echo -e "\n${GRAY}Skipped:${NC}"
+        printf "  ${GRAY}○${NC} %s\n" "${SKIPPED_APPS[@]}"
+    fi
 
     if [ "${#FAILED_APPS[@]}" -gt 0 ]; then
         echo -e "\n${RED}Failed:${NC}"
